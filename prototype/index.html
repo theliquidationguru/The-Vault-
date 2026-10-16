@@ -21,6 +21,7 @@
   --accent:#f0a33a; --accent-ink:#1a1206; --pine:#9fd1b6;
   --ok:#6fcf97; --warn:#f0b35a; --bad:#f08a7e; --ok-bg:#163223; --warn-bg:#33260f; --bad-bg:#3a1a16; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body)}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
@@ -105,8 +106,8 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 tr:last-child td{border-bottom:0}
 
 /* Age gate */
-.gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
-.gate .card{max-width:400px;width:100%;display:grid;gap:14px}
+.gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:start center;overflow-y:auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.gate .card{max-width:400px;width:100%;display:grid;gap:14px;margin-block:auto}
 .gate h1{font-size:2rem}
 .plans{display:grid;gap:8px}
 .plan{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px}
@@ -172,7 +173,10 @@ const PRICING = {
   markup: 2,                 // non-licensed items: shelf price × 2
   perMile: 2.00,             // store → customer, one way
   minMiles: 3,               // in-town trips counted as 3 mi (placeholder until real routing)
-  memberDayMileFactor: .5,   // paid members pay half mileage 6am–midnight; full rate midnight–6am
+  memberDayMileFactor: .5,
+  driverMileShare: 1,         // drivers keep 100% of the mileage charge
+  negotiatedFeeShare: .5,     // on a negotiated job, Rebu keeps 50% of the agreed price; driver gets the rest
+   // paid members pay half mileage 6am–midnight; full rate midnight–6am
   licensedFeeDay: 10,        // alcohol/tobacco/cannabis: no markup, flat fee 6am–midnight
   licensedFeeNight: 25,      // same, midnight–6am
 };
@@ -208,7 +212,7 @@ const STORES = [
 ];
 const SUPPLY = {partner:"Partner store",runner:"Runner buys it",own:"Our stock"};
 
-const state = {tab:"shop", cat:"all", age:0, tier:"gold", town:"Yreka", hour:23, cart:{}, orders:[], errand:null, courier:null, driverChecks:{}};
+const state = {tab:"shop", cat:"all", age:0, tier:"gold", town:"Yreka", hour:23, cart:{}, orders:[], errand:null, courier:null, driverChecks:{}, negMode:{e:false,c:false}, negOffer:{e:15,c:15}};
 const $ = s => document.querySelector(s);
 const money = n => "$" + n.toFixed(2);
 const fmtHour = h => String(h).padStart(2,"0") + ":00";
@@ -253,7 +257,8 @@ function quote(lines, legs, hour){
   const discount = r2(discountBase * t.discount);
   const total = r2(items + mileage + special - discount);
   const cost = r2(items - markupPart); // what we pay stores and runners
-  return {items, mileage, special, discount, total, ourTake:r2(total-cost), t};
+  const driverPay = r2(mileage*PRICING.driverMileShare);
+  return {items, mileage, special, discount, total, driverPay, ourTake:r2(total-cost-driverPay), t};
 }
 function quoteRows(q, legs){
   return `<div class="row"><span>Items</span><span class="price">${money(q.items)}</span></div>
@@ -304,18 +309,20 @@ function renderAnything(){
       <div class="field"><label for="eStoreTown">Store is in</label><select id="eStoreTown">${townOpts(e.storeTown)}</select></div>
       <div class="field"><label for="eList">What to buy</label><textarea id="eList" rows="3">${e.list}</textarea></div>
       <div class="field"><label for="eEst">Your estimate of the receipt</label><input type="number" id="eEst" min="0" step="1" value="${e.est}"></div>
-      ${quoteRows(eq,eLegs)}
+      ${negPicker("e",eq.mileage+eq.special)}
+      ${state.negMode.e?negRows(+e.est*PRICING.markup,state.negOffer.e):quoteRows(eq,eLegs)}
       <div class="notice"><b>How payment works:</b> we hold this estimate on your card. The runner pays at the store, and you're charged the real receipt × 2 plus mileage.</div>
       <div class="notice"><b>Not allowed:</b> anything illegal, prescription drugs, firearms or ammo. Alcohol, tobacco and cannabis must be ordered from a licensed store in Shop, not by errand.</div>
-      <button class="btn" id="sendErrand">Send errand request</button>
+      <button class="btn" id="sendErrand">${state.negMode.e?"Send offer to drivers":"Send errand request"}</button>
     </div>
     <div><p class="eyebrow">Platinum only</p><h2>Pick up from any address</h2></div>
     ${plat?`<div class="panel">
       <div class="field"><label for="cFrom">Pick up in</label><select id="cFrom">${townOpts(c.from)}</select></div>
       <div class="field"><label for="cTo">Drop off in</label><select id="cTo">${townOpts(c.to)}</select></div>
       <div class="field"><label for="cWhat">What are we carrying?</label><input type="text" id="cWhat" value="${c.what}"></div>
-      ${quoteRows(cq,cLegs)}
-      <button class="btn" id="sendCourier">Book pickup</button></div>`
+      ${negPicker("c",cq.mileage)}
+      ${state.negMode.c?negRows(0,state.negOffer.c):quoteRows(cq,cLegs)}
+      <button class="btn" id="sendCourier">${state.negMode.c?"Send offer to drivers":"Book pickup"}</button></div>`
     :`<div class="lock"><span>Point-to-point pickups come with Platinum ($39.99/mo).</span><button class="add" data-tierset="platinum">Upgrade</button></div>`}
     </section>`;
 }
@@ -342,10 +349,54 @@ function renderCart(){
     ${renderOrders()}</section>`;
 }
 
+/* ---------- Negotiated jobs: customer and driver agree a run price; Rebu keeps 50% ---------- */
+function negPicker(k,standard){
+  return `<div class="field"><span class="eyebrow">How do you want to pay for the run?</span><div class="seg">
+    <button data-negmode="${k}:0" aria-pressed="${!state.negMode[k]}">Standard · ${money(standard)}</button>
+    <button data-negmode="${k}:1" aria-pressed="${state.negMode[k]}">Name your price</button></div></div>
+    ${state.negMode[k]?`<div class="field"><label for="offer_${k}">Your offer for the run</label><input type="number" id="offer_${k}" min="1" step="1" value="${state.negOffer[k]}"></div>`:""}`;
+}
+function negRows(itemsAmt,offer){
+  return `${itemsAmt?`<div class="row"><span>Items (receipt × 2)</span><span class="price">${money(itemsAmt)}</span></div>`:""}
+    <div class="row"><span>Run price (your offer)</span><span class="price">${money(+offer)}</span></div>
+    <p class="small muted">A driver can accept or counter. Plan discounts don't apply to negotiated runs.</p>
+    <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
+    <div class="row"><strong>Total if accepted</strong><strong class="price">${money(itemsAmt+ +offer)}</strong></div>`;
+}
+function readOffers(){ ["e","c"].forEach(k=>{const el=$("#offer_"+k); if(el) state.negOffer[k]=Math.max(1,+el.value||1);}); }
+function negOrder(kind,summary,itemCost,offer,miles){
+  const o=placeOrder(kind,summary,false,{total:0,ourTake:0,driverPay:0},miles);
+  o.neg={amount:r2(offer),by:"customer",status:"offered",itemCost:+itemCost};
+  settleNeg(o); return o;
+}
+function settleNeg(o){
+  const n=o.neg, items=r2(n.itemCost*PRICING.markup);
+  o.total=r2(items+n.amount);
+  o.driverPay=r2(n.amount*(1-PRICING.negotiatedFeeShare));
+  o.ourTake=r2((items-n.itemCost)+n.amount*PRICING.negotiatedFeeShare);
+}
+function negStatus(o){
+  const n=o.neg;
+  return n.status==="agreed"?`Agreed at ${money(n.amount)}`:n.status==="declined"?"Declined":`${n.by==="customer"?"Customer offered":"Driver countered"} ${money(n.amount)}`;
+}
+function negActions(o,me){
+  const n=o.neg; if(n.status==="agreed"||n.status==="declined"||n.by===me) return `<p class="small muted">${n.status==="agreed"||n.status==="declined"?"":"Waiting for the other side to respond."}</p>`;
+  return `<div class="field"><label for="counter${o.id}">Counter amount</label><input type="number" id="counter${o.id}" min="1" step="1" value="${Math.round(n.amount*(me==="driver"?1.4:0.85))}"></div>
+    <div class="seg"><button class="btn" data-neg="${o.id}:accept">Accept ${money(n.amount)}</button><button class="btn ghost" data-neg="${o.id}:counter">Counter</button><button class="btn ghost" data-neg="${o.id}:decline">Decline</button></div>`;
+}
+function renderNegCustomer(o){ return `<div class="notice"><b>Name your price:</b> ${negStatus(o)}</div>${negActions(o,"customer")}`; }
+function renderNegDriver(o){
+  const n=o.neg;
+  return `<div class="row"><span>Run price</span><strong>${negStatus(o)}</strong></div>
+    <div class="row"><span>Your pay (50% of run price)</span><strong class="num">${money(n.amount*(1-PRICING.negotiatedFeeShare))}</strong></div>
+    ${negActions(o,"driver")}`;
+}
+
 function renderOrders(){
   if(!state.orders.length) return "";
   const steps=["Order received","Store packing","Runner on the way","Handoff at door","Delivered"];
   return `<h2>Your orders</h2>`+state.orders.slice().reverse().map(o=>`<div class="panel"><div class="row"><strong>#${o.id}</strong><span class="small muted">${o.kind} · ${fmtHour(o.hour)} · <span class="num">${money(o.total)}</span></span></div>
+    ${o.neg?renderNegCustomer(o):""}
     <ol class="steps">${steps.map((s,i)=>`<li class="${i<o.step?"done":i===o.step?"now":""}">${s}</li>`).join("")}</ol></div>`).join("");
 }
 
@@ -358,10 +409,10 @@ function renderDriver(){
   return `<section class="screen"><p class="eyebrow">Driver view · Run #${o.id}</p><h1>${o.kind==="Errand"?"Buy, then deliver":o.kind==="Pickup"?"Pick up, then drop off":"Pick up, then deliver"}</h1>
     <div class="panel"><div class="row"><span>Drop-off</span><strong>${o.town}</strong></div><div class="row"><span>Items</span><span>${o.summary}</span></div>
     <div class="row"><span>Miles</span><span class="num">${o.miles}</span></div>
-    <div class="row"><span>Driver pay</span><span class="pending">Not set yet</span></div></div>
+    ${o.neg?renderNegDriver(o):`<div class="row"><span>Your pay (100% of mileage)</span><strong class="num">${money(o.driverPay)}</strong></div>`}</div>
     <div class="panel"><h3>${o.restricted?"Door checklist (required)":"Handoff"}</h3>
       ${checks.map((t,i)=>`<label class="check"><input type="checkbox" data-chk="${o.id}:${i}" ${c[i]?"checked":""}><span>${t}</span></label>`).join("")}</div>
-    <div class="seg"><button class="btn" id="advance" ${o.step===3&&!all?"disabled":""}>${["Confirm order","Picked up","Arrived at door","Complete handoff"][o.step]}</button>
+    <div class="seg"><button class="btn" id="advance" ${(o.step===3&&!all)||(o.neg&&o.neg.status!=="agreed")?"disabled":""}>${["Confirm order","Picked up","Arrived at door","Complete handoff"][o.step]}</button>
     ${o.restricted&&o.step===3?`<button class="btn ghost" id="refuse">Refuse: no valid ID</button>`:""}</div></section>`;
 }
 
@@ -376,11 +427,13 @@ function renderAdmin(){
       <div class="row"><span>Licensed delivery fee</span><span class="num">$10 day · $25 midnight–6am</span></div>
       <div class="row"><span>Mileage, store → customer</span><span class="num">$2.00/mi, 3 mi minimum</span></div>
       <div class="row"><span>Members, 6am–midnight</span><span class="num">$1.00/mi (half)</span></div>
-      <div class="row"><span>Members, midnight–6am</span><span class="num">$2.00/mi (full)</span></div></div>
+      <div class="row"><span>Members, midnight–6am</span><span class="num">$2.00/mi (full)</span></div>
+      <div class="row"><span>Driver pay</span><span>100% of mileage</span></div>
+      <div class="row"><span>Negotiated jobs (errands, pickups)</span><span>Agreed price split 50% driver / 50% Rebu</span></div></div>
     <div class="tablewrap"><table style="min-width:420px"><thead><tr><th>Plan</th><th>Price</th><th>Includes</th></tr></thead><tbody>${tierRows}</tbody></table></div>
     <p class="muted small">At ${fmtHour(state.hour)}, these are the rules the app enforces. Move the demo time slider to watch categories open and close.</p>
     <div class="tablewrap"><table style="min-width:720px"><thead><tr><th>Category</th><th>Plan</th><th>Age</th><th>Hours</th><th>Price</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="panel"><h3>Orders today</h3>${state.orders.length?state.orders.map(o=>`<div class="row"><span>#${o.id} · ${o.kind} · ${o.town} <span class="num">${money(o.total)}</span></span><span class="tag ${o.refused?"closed":o.step>=4?"open":""}">${o.refused?"Refused":o.step>=4?"Delivered":"Active"}</span></div>`).join("")+`<div class="row"><strong>Our take before driver pay</strong><strong class="num">${money(rev)}</strong></div>`:`<p class="muted small">No orders yet.</p>`}</div>
+    <div class="panel"><h3>Orders today</h3>${state.orders.length?state.orders.map(o=>`<div class="row"><span>#${o.id} · ${o.kind} · ${o.town} <span class="num">${money(o.total)}</span></span><span class="tag ${o.refused?"closed":o.step>=4?"open":""}">${o.refused?"Refused":o.step>=4?"Delivered":"Active"}</span></div>`).join("")+`<div class="row"><span>Paid to drivers</span><span class="num">${money(state.orders.reduce((a,o)=>a+o.driverPay,0))}</span></div><div class="row"><strong>Our take after driver pay</strong><strong class="num">${money(rev)}</strong></div>`:`<p class="muted small">No orders yet.</p>`}</div>
     <p class="small muted">Legal notes are a working read of California rules, not legal advice. Confirm with a CA alcohol and cannabis attorney before launch.</p></section>`;
 }
 
@@ -397,7 +450,7 @@ function renderGatePlans(){
 }
 
 function placeOrder(kind,summary,restricted,q,miles){
-  const o={id:1040+state.orders.length+1,kind,summary,restricted,town:state.town,hour:state.hour,step:0,total:q.total,ourTake:q.ourTake,miles};
+  const o={id:1040+state.orders.length+1,kind,summary,restricted,town:state.town,hour:state.hour,step:0,total:q.total,ourTake:q.ourTake,driverPay:q.driverPay,miles};
   state.orders.push(o); return o;
 }
 function readErrand(){ state.errand={store:$("#eStore").value,storeTown:$("#eStoreTown").value,list:$("#eList").value,est:Math.max(0,+$("#eEst").value||0)}; }
@@ -429,6 +482,7 @@ document.addEventListener("click",e=>{
     readErrand(); const e2=state.errand;
     if(!e2.list.trim()){toast("Add at least one item to buy");return;}
     const legs=[{miles:billMiles(e2.storeTown,state.town)}];
+    if(state.negMode.e){ readOffers(); negOrder("Errand",e2.list.split("\n").filter(Boolean).join(", "),e2.est,state.negOffer.e,legs[0].miles); state.tab="cart"; toast("Offer sent to nearby drivers"); render(); return; }
     const q=quote([{amount:r2(e2.est*PRICING.markup),markup:true}],legs,state.hour);
     placeOrder("Errand",e2.list.split("\n").filter(Boolean).join(", "),false,q,legs[0].miles);
     state.tab="cart";toast("Errand sent to nearby runners");render();return;
@@ -436,9 +490,18 @@ document.addEventListener("click",e=>{
   if(t.id==="sendCourier"){
     readCourier(); const c=state.courier;
     const legs=[{miles:billMiles(c.from,c.to)}];
+    if(state.negMode.c){ readOffers(); const o=negOrder("Pickup",c.what||"Package",0,state.negOffer.c,legs[0].miles); o.town=c.to; state.tab="cart"; toast("Offer sent to nearby drivers"); render(); return; }
     const q=quote([],legs,state.hour);
     const o=placeOrder("Pickup",c.what||"Package",false,q,legs[0].miles); o.town=c.to;
     state.tab="cart";toast("Pickup booked");render();return;
+  }
+  if(t.dataset.negmode){const [k,v]=t.dataset.negmode.split(":");if(k==="e")readErrand();else readCourier();readOffers();state.negMode[k]=v==="1";render();return;}
+  if(t.dataset.neg){
+    const [id,act]=t.dataset.neg.split(":"); const o=state.orders.find(x=>x.id===+id); const n=o.neg;
+    if(act==="accept"){n.status="agreed";settleNeg(o);toast(`Agreed at ${money(n.amount)}`);}
+    if(act==="counter"){const v=+($("#counter"+o.id)||{}).value||0; if(v<=0){toast("Enter a counter amount");return;} n.amount=r2(v);n.by=n.by==="customer"?"driver":"customer";n.status="countered";toast("Counter sent");}
+    if(act==="decline"){o.step=4;o.refused=true;n.status="declined";toast("Offer declined");}
+    render();return;
   }
   if(t.id==="advance"){const o=state.orders.find(x=>x.step<4);o.step++;toast(o.step>=4?"Delivered":"Status updated");render();return;}
   if(t.id==="refuse"){const o=state.orders.find(x=>x.step<4);o.step=4;o.refused=true;toast("Refused. Return items to the store.");render();return;}

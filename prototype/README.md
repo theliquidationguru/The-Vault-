@@ -6,7 +6,7 @@ On-demand delivery for Siskiyou County, CA. Open `index.html` in a browser. Ther
 - **Age gate**: date of birth sets 18+ or 21+ access. The driver checks ID again at the door.
 - **Shop**: fictional sample stores in alcohol, tobacco/vape, cannabis, adult/novelty and everyday categories. Each store shows its supply model (partner store, runner buys it, our stock).
 - **Errand ("Any")**: the customer names anything legal, and a runner buys it at any open store.
-- **Checkout**: every fee shows **Pending approval**. No pricing is set.
+- **Checkout**: live totals using the approved pricing below.
 - **Driver**: a required door checklist for restricted items, with a "Refuse: no valid ID" path.
 - **Ops/Admin**: a rules engine showing age, legal hours and status per category. Move the demo-time slider to watch categories open and close.
 
@@ -36,4 +36,8 @@ Set in `PRICING` and `TIERS` at the top of the script in `index.html`.
 | Gold | $19.99 | Basic plus adult products; 15% off delivery charges |
 | Platinum | $39.99 | Gold plus 20% off every order (excluding licensed items' store price) and pickup from any address |
 
-"Delivery charges" means mileage plus the licensed-delivery fee. Driver pay is not set yet.
+"Delivery charges" means mileage plus the licensed-delivery fee.
+
+**Driver pay**
+- Standard orders: the driver gets 100% of the mileage charge (before any plan discount; Rebu absorbs the discount).
+- Negotiated jobs ("Name your price" on errands and pickups): the customer makes an offer for the run, and the driver can accept, counter or decline, back and forth. Once a price is agreed, the driver gets 50% of it and Rebu keeps 50%. Errand items are still charged at the receipt × 2. Plan discounts don't apply to negotiated runs.
