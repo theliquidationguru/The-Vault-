@@ -108,6 +108,15 @@ tr:last-child td{border-bottom:0}
 .gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
 .gate .card{max-width:400px;width:100%;display:grid;gap:14px}
 .gate h1{font-size:2rem}
+.plans{display:grid;gap:8px}
+.plan{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px}
+.plan[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.plan b{font-family:var(--display)} .plan .price{font-weight:700}
+.plan .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);margin-top:4px}
+.plan[aria-pressed=true] .dot{background:var(--accent);border-color:var(--accent)}
+.tag.tier{background:var(--sunk);color:var(--pine)}
+.lock{padding:10px 14px;background:var(--sunk);font-size:.85rem;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.discount{color:var(--ok)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:.9rem;z-index:15;max-width:calc(100% - 32px)}
 @media (prefers-reduced-motion:no-preference){.toast{transition:opacity .2s}}
 </style>
@@ -119,6 +128,8 @@ tr:last-child td{border-bottom:0}
     <p class="muted">Some items need ID. Enter your date of birth to see what you can order. Your driver checks your ID again at the door.</p>
     <div class="field"><label for="dob">Date of birth</label><input type="date" id="dob" value="1990-06-15"></div>
     <p class="small muted" id="gateMsg">Sample date filled in for the demo.</p>
+    <div class="field"><span class="eyebrow">Pick a membership</span>
+      <div class="plans" id="gatePlans"></div></div>
     <button class="btn" id="enter">Continue</button>
     <p class="proto">Prototype with sample stores and prices. No real orders or payments.</p>
   </div>
@@ -133,6 +144,9 @@ tr:last-child td{border-bottom:0}
     <div class="ctx">
       <label for="town">Deliver to
         <select id="town"></select>
+      </label>
+      <label for="tier">Plan
+        <select id="tier"></select>
       </label>
       <label for="hour">Demo time
         <input type="range" id="hour" min="0" max="23" value="23">
@@ -153,123 +167,195 @@ tr:last-child td{border-bottom:0}
 <div class="toast" id="toast" hidden></div>
 
 <script>
-/* ---------- PRICING: NOT SET. Every fee waits on owner approval. ---------- */
-const FEES = { approved:false, delivery:null, perMile:null, service:null, overnight:null, idCheck:null, smallOrder:null, errandShopping:null };
+/* ---------- PRICING (owner-approved 2026-10-16) ---------- */
+const PRICING = {
+  markup: 2,                 // non-licensed items: shelf price × 2
+  perMile: 2.00,             // store → customer, one way
+  minMiles: 3,               // in-town trips counted as 3 mi (placeholder until real routing)
+  licensedFeeDay: 10,        // alcohol/tobacco/cannabis: no markup, flat fee 6am–midnight
+  licensedFeeNight: 25,      // same, midnight–6am
+};
+/* Membership tiers. level gates categories; discount applies to `discountOn`. */
+const TIERS = [
+  {id:"none",     name:"No plan",  price:0,     level:0, discount:0,   discountOn:"none",  perks:"Everyday items only"},
+  {id:"basic",    name:"Basic",    price:9.99,  level:1, discount:.05, discountOn:"service", perks:"Alcohol, tobacco & cannabis · 5% off delivery charges"},
+  {id:"gold",     name:"Gold",     price:19.99, level:2, discount:.15, discountOn:"service", perks:"Basic + adult products · 15% off delivery charges"},
+  {id:"platinum", name:"Platinum", price:39.99, level:3, discount:.20, discountOn:"order",   perks:"Gold + 20% off every order · pickup from any address"},
+];
 
 /* Category rules. Hours are [open, close) in 24h; close past midnight wraps. Legal notes are a read of CA rules, to be confirmed by counsel. */
 const CATS = {
-  alcohol:  {name:"Alcohol",        age:21, hours:[6,2],  rule:"CA bans alcohol sales 2am–6am. Licensed store must hold the license; driver checks ID at handoff."},
-  tobacco:  {name:"Tobacco & vape", age:21, hours:null,   rule:"CA flavored-tobacco ban: unflavored/tobacco-flavor only. Federal PACT Act rules apply to delivery sales; adult ID at door."},
-  cannabis: {name:"Cannabis",       age:21, hours:[6,22], rule:"Licensed-retailer delivery only, 6am–10pm (DCC). Hemp THC products are being phased out in CA; CBD with no THC stays."},
-  adult:    {name:"Adult & novelty",age:18, hours:null,   rule:"18+ gate, discreet bag, no labels on the outside."},
-  everyday: {name:"Everyday",       age:0,  hours:null,   rule:"Snacks, OTC meds, phone chargers, auto parts. Open 24/7."},
+  everyday: {name:"Everyday",       age:0,  level:0, licensed:false, hours:null,   rule:"Snacks, OTC meds, chargers, auto parts. Open 24/7."},
+  alcohol:  {name:"Alcohol",        age:21, level:1, licensed:true,  hours:[6,2],  rule:"CA bans alcohol sales 2am–6am. Store is the seller of record; no markup. Driver checks ID."},
+  tobacco:  {name:"Tobacco & vape", age:21, level:1, licensed:true,  hours:null,   rule:"Unflavored only (CA flavor ban). PACT Act applies to delivery sales. Store is seller of record; no markup."},
+  cannabis: {name:"Cannabis",       age:21, level:1, licensed:true,  hours:[6,22], rule:"Licensed-retailer delivery only, 6am–10pm (DCC). No markup. Hemp THC being phased out in CA."},
+  adult:    {name:"Adult & novelty",age:18, level:2, licensed:false, hours:null,   rule:"Products only. 18+ gate, discreet bag."},
 };
 const TOWNS = [["Yreka",0],["Montague",6],["Grenada",11],["Weed",28],["Mount Shasta",36],["McCloud",46],["Dunsmuir",43],["Fort Jones",17],["Etna",29],["Happy Camp",72],["Dorris",50],["Tulelake",88]];
-/* Fictional sample stores. supply: partner | runner | own */
+/* Fictional sample stores. Item prices are the store's shelf price. supply: partner | runner | own */
 const STORES = [
+  {id:"s5",name:"Runner24 Stock Room",town:"Yreka",supply:"own",cats:["everyday"],items:[
+    ["Phone charger USB-C","everyday",9.00],["Pain reliever 50ct","everyday",7.50],["Energy drink 4pk","everyday",8.00],["Liquidation mystery box","everyday",25.00]]},
   {id:"s1",name:"North Valley Liquor & Mart",town:"Yreka",supply:"partner",cats:["alcohol","everyday"],items:[
     ["Local IPA 6-pack","alcohol",13.99],["Cabernet 750ml","alcohol",16.49],["Ice 10lb","everyday",4.29],["Tortilla chips","everyday",4.99]]},
-  {id:"s2",name:"Ridge Smoke & Vape",town:"Weed",supply:"partner",cats:["tobacco","adult"],items:[
-    ["Tobacco-flavor vape pod 2pk","tobacco",19.99],["Rolling papers","tobacco",2.99],["Glass pipe","adult",24.00]]},
+  {id:"s2",name:"Ridge Smoke & Vape",town:"Weed",supply:"partner",cats:["tobacco"],items:[
+    ["Tobacco-flavor vape pod 2pk","tobacco",19.99],["Rolling papers","tobacco",2.99]]},
   {id:"s3",name:"Cascade Green (licensed)",town:"Mount Shasta",supply:"partner",cats:["cannabis"],items:[
     ["Pre-roll 1g","cannabis",12.00],["Gummies 100mg","cannabis",22.00],["CBD tincture (0 THC)","cannabis",34.00]]},
   {id:"s4",name:"After Dark Boutique",town:"Yreka",supply:"partner",cats:["adult"],items:[
-    ["Massage oil","adult",18.00],["Novelty gift box","adult",29.00],["Party supplies kit","adult",15.00]]},
-  {id:"s5",name:"Runner24 Stock Room",town:"Yreka",supply:"own",cats:["everyday","adult"],items:[
-    ["Phone charger USB-C","everyday",9.00],["Pain reliever 50ct","everyday",7.50],["Energy drink 4pk","everyday",8.00],["Liquidation mystery box","everyday",25.00]]},
+    ["Massage oil","adult",18.00],["Novelty gift box","adult",29.00],["Glass pipe","adult",24.00]]},
 ];
 const SUPPLY = {partner:"Partner store",runner:"Runner buys it",own:"Our stock"};
 
-const state = {tab:"shop", cat:"all", age:0, town:"Yreka", hour:23, cart:{}, orders:[], errand:{store:"",list:"",est:""}, driverChecks:{}};
+const state = {tab:"shop", cat:"all", age:0, tier:"gold", town:"Yreka", hour:23, cart:{}, orders:[], errand:null, courier:null, driverChecks:{}};
 const $ = s => document.querySelector(s);
 const money = n => "$" + n.toFixed(2);
 const fmtHour = h => String(h).padStart(2,"0") + ":00";
+const tier = () => TIERS.find(t=>t.id===state.tier);
+const r2 = n => Math.round(n*100)/100;
 
 function isOpen(cat, h){
   const hrs = CATS[cat].hours; if(!hrs) return true;
   const [o,c] = hrs; return o < c ? (h>=o && h<c) : (h>=o || h<c);
 }
 function hoursText(cat){ const h=CATS[cat].hours; return h ? `${fmtHour(h[0])}–${fmtHour(h[1])}` : "24/7"; }
-function canBuy(cat){ return state.age >= CATS[cat].age; }
+function townMi(a,b){ return Math.abs(TOWNS.find(t=>t[0]===a)[1]-TOWNS.find(t=>t[0]===b)[1]); }
+function billMiles(a,b){ return Math.max(PRICING.minMiles, townMi(a,b)); }
+function ourPrice(cat, shelf){ return CATS[cat].licensed ? shelf : r2(shelf*PRICING.markup); }
+function licensedFee(h){ return h<6 ? PRICING.licensedFeeNight : PRICING.licensedFeeDay; }
+function blockReason(cat){
+  const c=CATS[cat];
+  if(state.age < c.age) return `${c.age}+ only`;
+  if(tier().level < c.level) return TIERS.find(t=>t.level===c.level).name+" plan";
+  if(!isOpen(cat,state.hour)) return `Opens ${fmtHour(c.hours[0])}`;
+  return null;
+}
 function itemKey(sid,i){ return sid+":"+i; }
-function findItem(key){ const [sid,i]=key.split(":"); const s=STORES.find(x=>x.id===sid); const it=s.items[+i]; return {store:s,name:it[0],cat:it[1],price:it[2]}; }
+function findItem(key){ const [sid,i]=key.split(":"); const s=STORES.find(x=>x.id===sid); const it=s.items[+i]; return {store:s,name:it[0],cat:it[1],shelf:it[2],price:ourPrice(it[1],it[2])}; }
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2200); }
 function cartCount(){ return Object.values(state.cart).reduce((a,b)=>a+b,0); }
+
+/* One quote function for store orders, errands and courier runs.
+   lines: [{label, amount, licensed}], legs: [{label, miles}] */
+function quote(lines, legs, hour){
+  const items = r2(lines.reduce((a,l)=>a+l.amount,0));
+  const licensedItems = r2(lines.filter(l=>l.licensed).reduce((a,l)=>a+l.amount,0));
+  const markupPart = r2(lines.filter(l=>!l.licensed&&l.markup).reduce((a,l)=>a+l.amount/2,0));
+  const mileage = r2(legs.reduce((a,l)=>a+l.miles*PRICING.perMile,0));
+  const special = lines.some(l=>l.licensed) ? licensedFee(hour) : 0;
+  const t = tier();
+  let discountBase = 0;
+  if(t.discountOn==="service") discountBase = mileage + special;
+  if(t.discountOn==="order") discountBase = (items - licensedItems) + mileage + special;
+  const discount = r2(discountBase * t.discount);
+  const total = r2(items + mileage + special - discount);
+  const cost = r2(items - markupPart); // what we pay stores and runners
+  return {items, mileage, special, discount, total, ourTake:r2(total-cost), t};
+}
+function quoteRows(q, legs){
+  return `<div class="row"><span>Items</span><span class="price">${money(q.items)}</span></div>
+    ${legs.map(l=>`<div class="row"><span>Mileage: ${l.label} <span class="muted small num">${l.miles} mi × $${PRICING.perMile.toFixed(2)}</span></span><span class="price">${money(l.miles*PRICING.perMile)}</span></div>`).join("")}
+    ${q.special?`<div class="row"><span>Licensed-item delivery <span class="muted small">${state.hour<6?"midnight–6am":"daytime"}</span></span><span class="price">${money(q.special)}</span></div>`:""}
+    ${q.discount?`<div class="row discount"><span>${q.t.name} discount ${Math.round(q.t.discount*100)}% <span class="small">${q.t.discountOn==="order"?"off order":"off delivery charges"}</span></span><span class="price">−${money(q.discount)}</span></div>`:""}
+    <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
+    <div class="row"><strong>Total before tip</strong><strong class="price">${money(q.total)}</strong></div>`;
+}
 
 /* ---------- Screens ---------- */
 function renderShop(){
   const chips = ["all",...Object.keys(CATS)].map(c=>`<button class="chip" aria-pressed="${state.cat===c}" data-cat="${c}">${c==="all"?"All":CATS[c].name}</button>`).join("");
   const stores = STORES.filter(s=>state.cat==="all"||s.cats.includes(state.cat)).map(s=>{
-    const dist = Math.abs(TOWNS.find(t=>t[0]===state.town)[1]-TOWNS.find(t=>t[0]===s.town)[1]);
+    const mi = billMiles(s.town,state.town);
+    const lockedLevel = Math.max(...s.cats.map(c=>CATS[c].level));
     const items = s.items.map((it,i)=>{
-      const [name,cat,price]=it, open=isOpen(cat,state.hour), ok=canBuy(cat);
-      const why = !ok ? `${CATS[cat].age}+ only` : !open ? `Opens ${fmtHour(CATS[cat].hours[0])}` : "Add";
-      return `<div class="item"><div><div>${name}</div><div class="tags">${CATS[cat].age?`<span class="tag age">${CATS[cat].age}+ ID</span>`:""}<span class="price small muted">${money(price)} shelf</span></div></div>
-        <button class="add" data-add="${itemKey(s.id,i)}" ${(!open||!ok)?"disabled":""}>${why}</button></div>`;
+      const [name,cat,shelf]=it, why=blockReason(cat), lic=CATS[cat].licensed;
+      return `<div class="item"><div><div>${name}</div><div class="tags">${CATS[cat].age?`<span class="tag age">${CATS[cat].age}+ ID</span>`:""}${lic?`<span class="tag">Store price</span>`:""}<span class="price small">${money(ourPrice(cat,shelf))}</span></div></div>
+        <button class="add" data-add="${itemKey(s.id,i)}" ${why?"disabled":""}>${why||"Add"}</button></div>`;
     }).join("");
     const anyClosed = s.items.some(it=>!isOpen(it[1],state.hour));
+    const locked = tier().level < lockedLevel;
     return `<article class="store"><div class="store-head"><div><h3>${s.name}</h3>
-      <div class="tags"><span class="tag">${SUPPLY[s.supply]}</span><span class="tag">${s.town}</span><span class="tag num">~${dist} mi</span></div></div>
+      <div class="tags"><span class="tag">${SUPPLY[s.supply]}</span><span class="tag">${s.town}</span><span class="tag num">${mi} mi · ${money(mi*PRICING.perMile)}</span></div></div>
       <span class="tag ${anyClosed?"closed":"open"}">${anyClosed?"Partly closed":"Open now"}</span></div>
+      ${locked?`<div class="lock"><span>Needs the ${TIERS.find(t=>t.level===lockedLevel).name} plan or higher.</span><button class="add" data-tierset="${TIERS.find(t=>t.level===lockedLevel).id}">Upgrade</button></div>`:""}
       ${anyClosed?`<div class="closed-note">Some items can't be delivered at ${fmtHour(state.hour)} under California law. They come back at the listed hour.</div>`:""}
       <div class="items">${items}</div></article>`;
   }).join("");
-  return `<section class="screen"><div><p class="eyebrow">Delivering to ${state.town}</p><h1>What do you need tonight?</h1></div>
+  return `<section class="screen"><div><p class="eyebrow">Delivering to ${state.town} · ${tier().name}</p><h1>What do you need tonight?</h1></div>
     <div class="chips" role="group" aria-label="Categories">${chips}</div>${stores}
     <div class="panel"><h3>Don't see it?</h3><p class="muted small">Send a runner to any open store for anything legal.</p><button class="btn ghost" data-go="anything">Start an errand</button></div></section>`;
 }
 
 function renderAnything(){
-  const e=state.errand;
+  const e=state.errand||{store:"North Valley Liquor & Mart",storeTown:"Yreka",list:"2x car jumper cables\nPhone charger (Lightning)\nBag of ice",est:45};
+  const eLegs=[{label:`${e.storeTown} → ${state.town}`,miles:billMiles(e.storeTown,state.town)}];
+  const eq=quote([{label:"Receipt × 2",amount:r2(+e.est*PRICING.markup),markup:true}],eLegs,state.hour);
+  const c=state.courier||{from:"Yreka",to:state.town,what:"Spare house key from a friend's place"};
+  const cLegs=[{label:`${c.from} → ${c.to}`,miles:billMiles(c.from,c.to)}];
+  const cq=quote([],cLegs,state.hour);
+  const plat=tier().level>=3;
+  const townOpts=sel=>TOWNS.map(t=>`<option ${t[0]===sel?"selected":""}>${t[0]}</option>`).join("");
   return `<section class="screen"><div><p class="eyebrow">Errand mode</p><h1>Name it. A runner buys it and brings it.</h1></div>
     <div class="panel">
-      <div class="field"><label for="eStore">Which store? (or "any open store")</label><input type="text" id="eStore" value="${e.store||"Any open store in Yreka"}"></div>
-      <div class="field"><label for="eList">What to buy</label><textarea id="eList" rows="4">${e.list||"2x car jumper cables\nPhone charger (Lightning)\nBag of ice"}</textarea></div>
-      <div class="field"><label for="eEst">Your estimate of item cost</label><input type="number" id="eEst" min="0" step="1" value="${e.est||45}"></div>
-      <div class="notice"><b>How payment works:</b> we hold the item estimate plus a buffer on your card, the runner pays at the store, and you're charged the receipt total. The errand fee is not set yet.</div>
-      <div class="notice"><b>Not allowed:</b> anything illegal, prescription drugs, firearms or ammo, or alcohol and cannabis outside licensed stores and legal hours.</div>
+      <div class="field"><label for="eStore">Which store?</label><input type="text" id="eStore" value="${e.store}"></div>
+      <div class="field"><label for="eStoreTown">Store is in</label><select id="eStoreTown">${townOpts(e.storeTown)}</select></div>
+      <div class="field"><label for="eList">What to buy</label><textarea id="eList" rows="3">${e.list}</textarea></div>
+      <div class="field"><label for="eEst">Your estimate of the receipt</label><input type="number" id="eEst" min="0" step="1" value="${e.est}"></div>
+      ${quoteRows(eq,eLegs)}
+      <div class="notice"><b>How payment works:</b> we hold this estimate on your card. The runner pays at the store, and you're charged the real receipt × 2 plus mileage.</div>
+      <div class="notice"><b>Not allowed:</b> anything illegal, prescription drugs, firearms or ammo. Alcohol, tobacco and cannabis must be ordered from a licensed store in Shop, not by errand.</div>
       <button class="btn" id="sendErrand">Send errand request</button>
-    </div></section>`;
+    </div>
+    <div><p class="eyebrow">Platinum only</p><h2>Pick up from any address</h2></div>
+    ${plat?`<div class="panel">
+      <div class="field"><label for="cFrom">Pick up in</label><select id="cFrom">${townOpts(c.from)}</select></div>
+      <div class="field"><label for="cTo">Drop off in</label><select id="cTo">${townOpts(c.to)}</select></div>
+      <div class="field"><label for="cWhat">What are we carrying?</label><input type="text" id="cWhat" value="${c.what}"></div>
+      ${quoteRows(cq,cLegs)}
+      <button class="btn" id="sendCourier">Book pickup</button></div>`
+    :`<div class="lock"><span>Point-to-point pickups come with Platinum ($39.99/mo).</span><button class="add" data-tierset="platinum">Upgrade</button></div>`}
+    </section>`;
 }
 
 function renderCart(){
   const keys=Object.keys(state.cart);
   if(!keys.length) return `<section class="screen"><h1>Your cart is empty</h1><p class="muted">Pick something from a store or start an errand.</p><button class="btn" data-go="shop">Browse stores</button>${renderOrders()}</section>`;
-  let sub=0, restricted=false;
-  const lines=keys.map(k=>{const it=findItem(k),q=state.cart[k];sub+=it.price*q;if(CATS[it.cat].age)restricted=true;
-    return `<div class="row"><span>${it.name}<br><span class="small muted">${it.store.name}</span></span><span class="qty"><button data-dec="${k}" aria-label="Remove one">−</button><span class="num">${q}</span><button data-inc="${k}" aria-label="Add one">+</button><span class="price">${money(it.price*q)}</span></span></div>`}).join("");
-  const overnight = state.hour>=22||state.hour<6;
-  const fee = (label,on=true)=> on?`<div class="row"><span>${label}</span><span class="pending">Pending approval</span></div>`:"";
+  const lines=[], storeTowns={};
+  const rows=keys.map(k=>{const it=findItem(k),q=state.cart[k];
+    lines.push({amount:r2(it.price*q),licensed:CATS[it.cat].licensed,markup:!CATS[it.cat].licensed});
+    storeTowns[it.store.name]=it.store.town;
+    return `<div class="row"><span>${it.name}<br><span class="small muted">${it.store.name}${CATS[it.cat].licensed?" · store price":" · shelf "+money(it.shelf)+" × 2"}</span></span><span class="qty"><button data-dec="${k}" aria-label="Remove one">−</button><span class="num">${q}</span><button data-inc="${k}" aria-label="Add one">+</button><span class="price">${money(it.price*q)}</span></span></div>`}).join("");
+  const legs=Object.entries(storeTowns).map(([n,tn])=>({label:`${n} → ${state.town}`,miles:billMiles(tn,state.town)}));
+  const q=quote(lines,legs,state.hour);
+  const restricted=keys.some(k=>CATS[findItem(k).cat].age>0);
   return `<section class="screen"><h1>Checkout</h1>
-    <div class="panel">${lines}</div>
-    <div class="panel">
-      <div class="row"><span>Items (shelf price)</span><span class="price">${money(sub)}</span></div>
-      ${fee("Delivery fee")}${fee("Service fee")}${fee("Overnight fee (10pm–6am)",overnight)}${fee("ID check fee",restricted)}${fee("Small order fee",sub<15)}
+    <div class="panel">${rows}</div>
+    <div class="panel">${quoteRows(q,legs)}
       <div class="row"><span>Driver tip</span><span class="seg" id="tips">${[0,3,5,8].map(t=>`<button aria-pressed="${t===5}" data-tip="${t}">$${t}</button>`).join("")}</span></div>
-      <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
-      <div class="row"><strong>Total</strong><span class="pending">Items ${money(sub)} + fees not set</span></div>
+      <p class="small muted">${tier().name}${tier().price?` membership billed monthly (${money(tier().price)}), not per order.`:" · upgrade for discounts and more categories."}</p>
     </div>
     ${restricted?`<div class="notice"><b>ID required at the door.</b> The person who ordered must be there with a valid photo ID. If no one can show ID, the driver brings the order back.</div>`:""}
-    <button class="btn" id="place">Place demo order</button>
+    <button class="btn" id="place">Place demo order · ${money(q.total)}</button>
     ${renderOrders()}</section>`;
 }
 
 function renderOrders(){
   if(!state.orders.length) return "";
-  const steps=["Order received","Store packing","Runner on the way","ID check at door","Delivered"];
-  return `<h2>Your orders</h2>`+state.orders.slice().reverse().map(o=>`<div class="panel"><div class="row"><strong>#${o.id}</strong><span class="small muted">${o.kind} · ${fmtHour(o.hour)}</span></div>
+  const steps=["Order received","Store packing","Runner on the way","Handoff at door","Delivered"];
+  return `<h2>Your orders</h2>`+state.orders.slice().reverse().map(o=>`<div class="panel"><div class="row"><strong>#${o.id}</strong><span class="small muted">${o.kind} · ${fmtHour(o.hour)} · <span class="num">${money(o.total)}</span></span></div>
     <ol class="steps">${steps.map((s,i)=>`<li class="${i<o.step?"done":i===o.step?"now":""}">${s}</li>`).join("")}</ol></div>`).join("");
 }
 
 function renderDriver(){
   const o=state.orders.find(x=>x.step<4);
-  if(!o) return `<section class="screen"><p class="eyebrow">Driver view</p><h1>No active runs</h1><p class="muted">Place a demo order or errand to see the driver flow.</p></section>`;
+  if(!o) return `<section class="screen"><p class="eyebrow">Driver view</p><h1>No active runs</h1><p class="muted">Place a demo order, errand or pickup to see the driver flow.</p></section>`;
   const checks=o.restricted?["Scan ID: not expired, matches order name","Age on ID meets the item's limit","Face matches the photo","Customer isn't visibly intoxicated","Not handing to a minor or a third party"]:["Confirm address and name"];
   const c=state.driverChecks[o.id]||{};
   const all=checks.every((_,i)=>c[i]);
-  return `<section class="screen"><p class="eyebrow">Driver view · Run #${o.id}</p><h1>${o.kind==="Errand"?"Buy, then deliver":"Pick up, then deliver"}</h1>
+  return `<section class="screen"><p class="eyebrow">Driver view · Run #${o.id}</p><h1>${o.kind==="Errand"?"Buy, then deliver":o.kind==="Pickup"?"Pick up, then drop off":"Pick up, then deliver"}</h1>
     <div class="panel"><div class="row"><span>Drop-off</span><strong>${o.town}</strong></div><div class="row"><span>Items</span><span>${o.summary}</span></div>
-    <div class="row"><span>Driver pay</span><span class="pending">Pending approval</span></div></div>
+    <div class="row"><span>Miles</span><span class="num">${o.miles}</span></div>
+    <div class="row"><span>Driver pay</span><span class="pending">Not set yet</span></div></div>
     <div class="panel"><h3>${o.restricted?"Door checklist (required)":"Handoff"}</h3>
       ${checks.map((t,i)=>`<label class="check"><input type="checkbox" data-chk="${o.id}:${i}" ${c[i]?"checked":""}><span>${t}</span></label>`).join("")}</div>
     <div class="seg"><button class="btn" id="advance" ${o.step===3&&!all?"disabled":""}>${["Confirm order","Picked up","Arrived at door","Complete handoff"][o.step]}</button>
@@ -277,35 +363,45 @@ function renderDriver(){
 }
 
 function renderAdmin(){
-  const rows=Object.entries(CATS).map(([k,c])=>`<tr><td><strong>${c.name}</strong></td><td class="num">${c.age||"—"}</td><td class="num">${hoursText(k)}</td><td><span class="tag ${isOpen(k,state.hour)?"open":"closed"}">${isOpen(k,state.hour)?"Selling":"Blocked"}</span></td><td>${c.rule}</td></tr>`).join("");
-  const feeRows=Object.entries(FEES).filter(([k])=>k!=="approved").map(([k])=>`<div class="row"><span>${k.replace(/([A-Z])/g," $1").replace(/^./,m=>m.toUpperCase())}</span><span class="pending">Not set</span></div>`).join("");
-  return `<section class="screen"><p class="eyebrow">Operations</p><h1>Rules engine</h1>
+  const rows=Object.entries(CATS).map(([k,c])=>`<tr><td><strong>${c.name}</strong></td><td>${TIERS.find(t=>t.level===c.level).name}</td><td class="num">${c.age||"—"}</td><td class="num">${hoursText(k)}</td><td>${c.licensed?"Store price + $10 / $25 fee":"Shelf × 2"}</td><td><span class="tag ${isOpen(k,state.hour)?"open":"closed"}">${isOpen(k,state.hour)?"Selling":"Blocked"}</span></td><td>${c.rule}</td></tr>`).join("");
+  const tierRows=TIERS.filter(t=>t.price).map(t=>`<tr><td><strong>${t.name}</strong></td><td class="num">${money(t.price)}/mo</td><td>${t.perks}</td></tr>`).join("");
+  const rev=state.orders.reduce((a,o)=>a+o.ourTake,0);
+  return `<section class="screen"><p class="eyebrow">Operations</p><h1>Pricing & rules</h1>
+    <div class="panel"><h3>Per-order pricing</h3>
+      <div class="row"><span>Everyday, adult, errands</span><span>Shelf price × 2</span></div>
+      <div class="row"><span>Alcohol, tobacco, cannabis</span><span>Store price, no markup</span></div>
+      <div class="row"><span>Licensed delivery fee</span><span class="num">$10 day · $25 midnight–6am</span></div>
+      <div class="row"><span>Mileage, store → customer</span><span class="num">$2.00/mi, 3 mi minimum</span></div></div>
+    <div class="tablewrap"><table style="min-width:420px"><thead><tr><th>Plan</th><th>Price</th><th>Includes</th></tr></thead><tbody>${tierRows}</tbody></table></div>
     <p class="muted small">At ${fmtHour(state.hour)}, these are the rules the app enforces. Move the demo time slider to watch categories open and close.</p>
-    <div class="tablewrap"><table><thead><tr><th>Category</th><th>Age</th><th>Hours</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="panel"><h3>Supply models</h3>
-      <div class="row"><span>Partner store</span><span class="small muted">Store lists stock; we take a commission</span></div>
-      <div class="row"><span>Runner buys it</span><span class="small muted">Runner pays at the counter; customer pays the receipt plus fees</span></div>
-      <div class="row"><span>Our stock</span><span class="small muted">We hold inventory; full retail margin</span></div></div>
-    <div class="panel"><h3>Pricing</h3><p class="small muted">Every fee is off until you approve the pricing plan.</p>${feeRows}</div>
-    <div class="panel"><h3>Orders today</h3>${state.orders.length?state.orders.map(o=>`<div class="row"><span>#${o.id} · ${o.kind} · ${o.town}</span><span class="tag ${o.refused?"closed":o.step>=4?"open":""}">${o.refused?"Refused":o.step>=4?"Delivered":"Active"}</span></div>`).join(""):`<p class="muted small">No orders yet.</p>`}</div>
+    <div class="tablewrap"><table style="min-width:720px"><thead><tr><th>Category</th><th>Plan</th><th>Age</th><th>Hours</th><th>Price</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="panel"><h3>Orders today</h3>${state.orders.length?state.orders.map(o=>`<div class="row"><span>#${o.id} · ${o.kind} · ${o.town} <span class="num">${money(o.total)}</span></span><span class="tag ${o.refused?"closed":o.step>=4?"open":""}">${o.refused?"Refused":o.step>=4?"Delivered":"Active"}</span></div>`).join("")+`<div class="row"><strong>Our take before driver pay</strong><strong class="num">${money(rev)}</strong></div>`:`<p class="muted small">No orders yet.</p>`}</div>
     <p class="small muted">Legal notes are a working read of California rules, not legal advice. Confirm with a CA alcohol and cannabis attorney before launch.</p></section>`;
 }
 
 /* ---------- Render + events ---------- */
 function render(){
   $("#clockLabel").textContent=fmtHour(state.hour);
+  $("#tier").value=state.tier;
   const n=cartCount(); $("#cartTab").innerHTML=n?`Cart <span class="badge-count">${n}</span>`:"Cart";
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===state.tab));
   $("#main").innerHTML={shop:renderShop,anything:renderAnything,cart:renderCart,driver:renderDriver,admin:renderAdmin}[state.tab]();
 }
+function renderGatePlans(){
+  $("#gatePlans").innerHTML=TIERS.map(t=>`<button class="plan" aria-pressed="${t.id===state.tier}" data-gatetier="${t.id}"><span class="dot"></span><span><b>${t.name}</b><br><span class="small muted">${t.perks}</span></span><span class="price">${t.price?money(t.price)+"/mo":"Free"}</span></button>`).join("");
+}
 
-function placeOrder(kind,summary,restricted){
-  const o={id:1040+state.orders.length+1,kind,summary,restricted,town:state.town,hour:state.hour,step:0};
+function placeOrder(kind,summary,restricted,q,miles){
+  const o={id:1040+state.orders.length+1,kind,summary,restricted,town:state.town,hour:state.hour,step:0,total:q.total,ourTake:q.ourTake,miles};
   state.orders.push(o); return o;
 }
+function readErrand(){ state.errand={store:$("#eStore").value,storeTown:$("#eStoreTown").value,list:$("#eList").value,est:Math.max(0,+$("#eEst").value||0)}; }
+function readCourier(){ if($("#cFrom")) state.courier={from:$("#cFrom").value,to:$("#cTo").value,what:$("#cWhat").value}; }
 
 document.addEventListener("click",e=>{
   const t=e.target.closest("button"); if(!t) return;
+  if(t.dataset.gatetier){state.tier=t.dataset.gatetier;renderGatePlans();return;}
+  if(t.dataset.tierset){state.tier=t.dataset.tierset;toast(`Switched to ${tier().name} (demo)`);render();return;}
   if(t.dataset.tab){state.tab=t.dataset.tab;render();window.scrollTo(0,0);return;}
   if(t.dataset.go){state.tab=t.dataset.go;render();window.scrollTo(0,0);return;}
   if(t.dataset.cat){state.cat=t.dataset.cat;render();return;}
@@ -315,28 +411,45 @@ document.addEventListener("click",e=>{
   if(t.dataset.tip){t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t));return;}
   if(t.id==="place"){
     const keys=Object.keys(state.cart);
-    const blocked=keys.filter(k=>!isOpen(findItem(k).cat,state.hour));
-    if(blocked.length){toast(`${findItem(blocked[0]).name} can't be delivered at ${fmtHour(state.hour)}`);return;}
-    const restricted=keys.some(k=>CATS[findItem(k).cat].age>0);
-    placeOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),restricted);
+    const blocked=keys.find(k=>blockReason(findItem(k).cat));
+    if(blocked){toast(`${findItem(blocked).name}: ${blockReason(findItem(blocked).cat)}`);return;}
+    const lines=keys.map(k=>{const it=findItem(k);return {amount:r2(it.price*state.cart[k]),licensed:CATS[it.cat].licensed,markup:!CATS[it.cat].licensed}});
+    const towns=[...new Set(keys.map(k=>findItem(k).store.town))];
+    const legs=towns.map(tn=>({miles:billMiles(tn,state.town)}));
+    const q=quote(lines,legs,state.hour);
+    placeOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),keys.some(k=>CATS[findItem(k).cat].age>0),q,legs.reduce((a,l)=>a+l.miles,0));
     state.cart={};toast("Demo order placed");render();return;
   }
   if(t.id==="sendErrand"){
-    state.errand={store:$("#eStore").value,list:$("#eList").value,est:$("#eEst").value};
-    if(!state.errand.list.trim()){toast("Add at least one item to buy");return;}
-    placeOrder("Errand",state.errand.list.split("\n").filter(Boolean).join(", "),false);
+    readErrand(); const e2=state.errand;
+    if(!e2.list.trim()){toast("Add at least one item to buy");return;}
+    const legs=[{miles:billMiles(e2.storeTown,state.town)}];
+    const q=quote([{amount:r2(e2.est*PRICING.markup),markup:true}],legs,state.hour);
+    placeOrder("Errand",e2.list.split("\n").filter(Boolean).join(", "),false,q,legs[0].miles);
     state.tab="cart";toast("Errand sent to nearby runners");render();return;
+  }
+  if(t.id==="sendCourier"){
+    readCourier(); const c=state.courier;
+    const legs=[{miles:billMiles(c.from,c.to)}];
+    const q=quote([],legs,state.hour);
+    const o=placeOrder("Pickup",c.what||"Package",false,q,legs[0].miles); o.town=c.to;
+    state.tab="cart";toast("Pickup booked");render();return;
   }
   if(t.id==="advance"){const o=state.orders.find(x=>x.step<4);o.step++;toast(o.step>=4?"Delivered":"Status updated");render();return;}
   if(t.id==="refuse"){const o=state.orders.find(x=>x.step<4);o.step=4;o.refused=true;toast("Refused. Return items to the store.");render();return;}
 });
 document.addEventListener("change",e=>{
   const c=e.target.dataset&&e.target.dataset.chk;
-  if(c){const [id,i]=c.split(":");(state.driverChecks[id]=state.driverChecks[id]||{})[i]=e.target.checked;render();}
+  if(c){const [id,i]=c.split(":");(state.driverChecks[id]=state.driverChecks[id]||{})[i]=e.target.checked;render();return;}
+  if(["eStoreTown","eEst"].includes(e.target.id)){readErrand();render();}
+  if(["cFrom","cTo"].includes(e.target.id)){readCourier();render();}
 });
 $("#hour").addEventListener("input",e=>{state.hour=+e.target.value;render();});
 $("#town").innerHTML=TOWNS.map(t=>`<option>${t[0]}</option>`).join("");
 $("#town").addEventListener("change",e=>{state.town=e.target.value;render();});
+$("#tier").innerHTML=TIERS.map(t=>`<option value="${t.id}">${t.name}${t.price?" "+money(t.price):""}</option>`).join("");
+$("#tier").addEventListener("change",e=>{state.tier=e.target.value;render();});
+renderGatePlans();
 $("#enter").addEventListener("click",()=>{
   const v=$("#dob").value; if(!v){$("#gateMsg").textContent="Enter your date of birth to continue.";return;}
   const d=new Date(v), now=new Date(); let a=now.getFullYear()-d.getFullYear(); if(now<new Date(now.getFullYear(),d.getMonth(),d.getDate()))a--;

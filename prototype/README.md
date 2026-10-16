@@ -19,5 +19,20 @@ On-demand delivery for Siskiyou County, CA. Open `index.html` in a browser. Ther
 | Adult/novelty | 18 | 24/7 | Discreet packaging |
 | Everyday | — | 24/7 | |
 
-## Pricing
-Not implemented. Every value in `FEES` in `index.html` is `null` until the owner approves a plan.
+## Pricing (owner-approved 2026-10-16)
+Set in `PRICING` and `TIERS` at the top of the script in `index.html`.
+
+**Per order**
+- Everyday, adult/novelty and errand items: shelf price × 2.
+- Alcohol, tobacco and cannabis: the store's price with no markup (the licensed store stays the seller), plus a flat licensed-delivery fee of $10 from 6am to midnight or $25 from midnight to 6am.
+- Mileage: $2.00/mile, measured one way from the store to the customer. In-town trips count as 3 miles until real routing is added.
+
+**Memberships (monthly)**
+| Plan | Price | Includes |
+|---|---|---|
+| No plan | Free | Everyday items only |
+| Basic | $9.99 | Alcohol, tobacco and cannabis; 5% off delivery charges |
+| Gold | $19.99 | Basic plus adult products; 15% off delivery charges |
+| Platinum | $39.99 | Gold plus 20% off every order (excluding licensed items' store price) and pickup from any address |
+
+"Delivery charges" means mileage plus the licensed-delivery fee. Driver pay is not set yet.
