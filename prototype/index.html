@@ -212,7 +212,7 @@ const STORES = [
 ];
 const SUPPLY = {partner:"Partner store",runner:"Runner buys it",own:"Our stock"};
 
-const state = {tab:"shop", cat:"all", age:0, tier:"gold", town:"Yreka", hour:23, cart:{}, orders:[], errand:null, courier:null, driverChecks:{}, negMode:{e:false,c:false}, negOffer:{e:15,c:15}};
+const state = {tab:"shop", cat:"all", age:0, tier:"gold", town:"Yreka", hour:23, cart:{}, orders:[], errand:null, courier:null, driverChecks:{}, negMode:{e:false,c:false,s:false}, negOffer:{e:15,c:15,s:12}};
 const $ = s => document.querySelector(s);
 const money = n => "$" + n.toFixed(2);
 const fmtHour = h => String(h).padStart(2,"0") + ":00";
@@ -340,37 +340,39 @@ function renderCart(){
   const restricted=keys.some(k=>CATS[findItem(k).cat].age>0);
   return `<section class="screen"><h1>Checkout</h1>
     <div class="panel">${rows}</div>
-    <div class="panel">${quoteRows(q,legs)}
+    <div class="panel">${negPicker("s",q.mileage+q.special)}
+      ${state.negMode.s?negRows(q.items,state.negOffer.s,"Items"):quoteRows(q,legs)}
       <div class="row"><span>Driver tip</span><span class="seg" id="tips">${[0,3,5,8].map(t=>`<button aria-pressed="${t===5}" data-tip="${t}">$${t}</button>`).join("")}</span></div>
       <p class="small muted">${tier().name}${tier().price?` membership billed monthly (${money(tier().price)}), not per order.`:" · upgrade for discounts and more categories."}</p>
     </div>
     ${restricted?`<div class="notice"><b>ID required at the door.</b> The person who ordered must be there with a valid photo ID. If no one can show ID, the driver brings the order back.</div>`:""}
-    <button class="btn" id="place">Place demo order · ${money(q.total)}</button>
+    <button class="btn" id="place">${state.negMode.s?"Send delivery offer to drivers":"Place demo order · "+money(q.total)}</button>
     ${renderOrders()}</section>`;
 }
 
-/* ---------- Negotiated jobs: customer and driver agree a run price; Rebu keeps 50% ---------- */
+/* ---------- Negotiated jobs: customer and driver agree a delivery price (products are never negotiable); Rebu keeps 50% ---------- */
 function negPicker(k,standard){
   return `<div class="field"><span class="eyebrow">How do you want to pay for the run?</span><div class="seg">
     <button data-negmode="${k}:0" aria-pressed="${!state.negMode[k]}">Standard · ${money(standard)}</button>
     <button data-negmode="${k}:1" aria-pressed="${state.negMode[k]}">Name your price</button></div></div>
-    ${state.negMode[k]?`<div class="field"><label for="offer_${k}">Your offer for the run</label><input type="number" id="offer_${k}" min="1" step="1" value="${state.negOffer[k]}"></div>`:""}`;
+    ${state.negMode[k]?`<div class="field"><label for="offer_${k}">Your offer for delivery</label><input type="number" id="offer_${k}" min="1" step="1" value="${state.negOffer[k]}"></div>`:""}`;
 }
-function negRows(itemsAmt,offer){
-  return `${itemsAmt?`<div class="row"><span>Items (receipt × 2)</span><span class="price">${money(itemsAmt)}</span></div>`:""}
-    <div class="row"><span>Run price (your offer)</span><span class="price">${money(+offer)}</span></div>
-    <p class="small muted">A driver can accept or counter. Plan discounts don't apply to negotiated runs.</p>
+function negRows(itemsAmt,offer,label="Items (receipt × 2)"){
+  return `${itemsAmt?`<div class="row"><span>${label} <span class="small muted">fixed</span></span><span class="price">${money(itemsAmt)}</span></div>`:""}
+    <div class="row"><span>Delivery (your offer)</span><span class="price">${money(+offer)}</span></div>
+    <p class="small muted">Only the delivery price is negotiable. A driver can accept or counter. Plan discounts don't apply to negotiated deliveries.</p>
     <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
     <div class="row"><strong>Total if accepted</strong><strong class="price">${money(itemsAmt+ +offer)}</strong></div>`;
 }
-function readOffers(){ ["e","c"].forEach(k=>{const el=$("#offer_"+k); if(el) state.negOffer[k]=Math.max(1,+el.value||1);}); }
-function negOrder(kind,summary,itemCost,offer,miles){
-  const o=placeOrder(kind,summary,false,{total:0,ourTake:0,driverPay:0},miles);
-  o.neg={amount:r2(offer),by:"customer",status:"offered",itemCost:+itemCost};
+function readOffers(){ ["e","c","s"].forEach(k=>{const el=$("#offer_"+k); if(el) state.negOffer[k]=Math.max(1,+el.value||1);}); }
+/* items = what the customer pays for products (fixed); itemCost = what we pay the store/receipt */
+function negOrder(kind,summary,items,itemCost,offer,miles,restricted=false){
+  const o=placeOrder(kind,summary,restricted,{total:0,ourTake:0,driverPay:0},miles);
+  o.neg={amount:r2(offer),by:"customer",status:"offered",items:r2(items),itemCost:r2(itemCost)};
   settleNeg(o); return o;
 }
 function settleNeg(o){
-  const n=o.neg, items=r2(n.itemCost*PRICING.markup);
+  const n=o.neg, items=n.items;
   o.total=r2(items+n.amount);
   o.driverPay=r2(n.amount*(1-PRICING.negotiatedFeeShare));
   o.ourTake=r2((items-n.itemCost)+n.amount*PRICING.negotiatedFeeShare);
@@ -387,8 +389,8 @@ function negActions(o,me){
 function renderNegCustomer(o){ return `<div class="notice"><b>Name your price:</b> ${negStatus(o)}</div>${negActions(o,"customer")}`; }
 function renderNegDriver(o){
   const n=o.neg;
-  return `<div class="row"><span>Run price</span><strong>${negStatus(o)}</strong></div>
-    <div class="row"><span>Your pay (50% of run price)</span><strong class="num">${money(n.amount*(1-PRICING.negotiatedFeeShare))}</strong></div>
+  return `<div class="row"><span>Delivery price</span><strong>${negStatus(o)}</strong></div>
+    <div class="row"><span>Your pay (50% of delivery price)</span><strong class="num">${money(n.amount*(1-PRICING.negotiatedFeeShare))}</strong></div>
     ${negActions(o,"driver")}`;
 }
 
@@ -429,7 +431,7 @@ function renderAdmin(){
       <div class="row"><span>Members, 6am–midnight</span><span class="num">$1.00/mi (half)</span></div>
       <div class="row"><span>Members, midnight–6am</span><span class="num">$2.00/mi (full)</span></div>
       <div class="row"><span>Driver pay</span><span>100% of mileage</span></div>
-      <div class="row"><span>Negotiated jobs (errands, pickups)</span><span>Agreed price split 50% driver / 50% Rebu</span></div></div>
+      <div class="row"><span>Name your price (any order)</span><span>Delivery only: 50% driver / 50% Rebu; products fixed</span></div></div>
     <div class="tablewrap"><table style="min-width:420px"><thead><tr><th>Plan</th><th>Price</th><th>Includes</th></tr></thead><tbody>${tierRows}</tbody></table></div>
     <p class="muted small">At ${fmtHour(state.hour)}, these are the rules the app enforces. Move the demo time slider to watch categories open and close.</p>
     <div class="tablewrap"><table style="min-width:720px"><thead><tr><th>Category</th><th>Plan</th><th>Age</th><th>Hours</th><th>Price</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -475,6 +477,12 @@ document.addEventListener("click",e=>{
     const towns=[...new Set(keys.map(k=>findItem(k).store.town))];
     const legs=towns.map(tn=>({miles:billMiles(tn,state.town)}));
     const q=quote(lines,legs,state.hour);
+    if(state.negMode.s){
+      readOffers();
+      const cost=r2(keys.reduce((a,k)=>{const it=findItem(k);return a+(CATS[it.cat].licensed?it.price:it.shelf)*state.cart[k];},0));
+      negOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),q.items,cost,state.negOffer.s,legs.reduce((a,l)=>a+l.miles,0),keys.some(k=>CATS[findItem(k).cat].age>0));
+      state.cart={};toast("Delivery offer sent to nearby drivers");render();return;
+    }
     placeOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),keys.some(k=>CATS[findItem(k).cat].age>0),q,legs.reduce((a,l)=>a+l.miles,0));
     state.cart={};toast("Demo order placed");render();return;
   }
@@ -482,7 +490,7 @@ document.addEventListener("click",e=>{
     readErrand(); const e2=state.errand;
     if(!e2.list.trim()){toast("Add at least one item to buy");return;}
     const legs=[{miles:billMiles(e2.storeTown,state.town)}];
-    if(state.negMode.e){ readOffers(); negOrder("Errand",e2.list.split("\n").filter(Boolean).join(", "),e2.est,state.negOffer.e,legs[0].miles); state.tab="cart"; toast("Offer sent to nearby drivers"); render(); return; }
+    if(state.negMode.e){ readOffers(); negOrder("Errand",e2.list.split("\n").filter(Boolean).join(", "),e2.est*PRICING.markup,e2.est,state.negOffer.e,legs[0].miles); state.tab="cart"; toast("Offer sent to nearby drivers"); render(); return; }
     const q=quote([{amount:r2(e2.est*PRICING.markup),markup:true}],legs,state.hour);
     placeOrder("Errand",e2.list.split("\n").filter(Boolean).join(", "),false,q,legs[0].miles);
     state.tab="cart";toast("Errand sent to nearby runners");render();return;
@@ -490,12 +498,12 @@ document.addEventListener("click",e=>{
   if(t.id==="sendCourier"){
     readCourier(); const c=state.courier;
     const legs=[{miles:billMiles(c.from,c.to)}];
-    if(state.negMode.c){ readOffers(); const o=negOrder("Pickup",c.what||"Package",0,state.negOffer.c,legs[0].miles); o.town=c.to; state.tab="cart"; toast("Offer sent to nearby drivers"); render(); return; }
+    if(state.negMode.c){ readOffers(); const o=negOrder("Pickup",c.what||"Package",0,0,state.negOffer.c,legs[0].miles); o.town=c.to; state.tab="cart"; toast("Offer sent to nearby drivers"); render(); return; }
     const q=quote([],legs,state.hour);
     const o=placeOrder("Pickup",c.what||"Package",false,q,legs[0].miles); o.town=c.to;
     state.tab="cart";toast("Pickup booked");render();return;
   }
-  if(t.dataset.negmode){const [k,v]=t.dataset.negmode.split(":");if(k==="e")readErrand();else readCourier();readOffers();state.negMode[k]=v==="1";render();return;}
+  if(t.dataset.negmode){const [k,v]=t.dataset.negmode.split(":");if(k==="e")readErrand();else if(k==="c")readCourier();readOffers();state.negMode[k]=v==="1";render();return;}
   if(t.dataset.neg){
     const [id,act]=t.dataset.neg.split(":"); const o=state.orders.find(x=>x.id===+id); const n=o.neg;
     if(act==="accept"){n.status="agreed";settleNeg(o);toast(`Agreed at ${money(n.amount)}`);}

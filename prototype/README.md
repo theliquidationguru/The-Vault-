@@ -40,4 +40,4 @@ Set in `PRICING` and `TIERS` at the top of the script in `index.html`.
 
 **Driver pay**
 - Standard orders: the driver gets 100% of the mileage charge (before any plan discount; Rebu absorbs the discount).
-- Negotiated jobs ("Name your price" on errands and pickups): the customer makes an offer for the run, and the driver can accept, counter or decline, back and forth. Once a price is agreed, the driver gets 50% of it and Rebu keeps 50%. Errand items are still charged at the receipt × 2. Plan discounts don't apply to negotiated runs.
+- Name your price (available on every order, including licensed products): only the delivery price is negotiable. The customer offers a delivery price and the driver can accept, counter or decline. The agreed delivery price splits 50% driver / 50% Rebu and replaces mileage and the licensed-delivery fee. Products are never negotiable: non-licensed items stay at shelf × 2 (Rebu keeps the markup), licensed items stay at the store price. Plan discounts don't apply to negotiated deliveries.
