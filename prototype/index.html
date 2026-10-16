@@ -1,0 +1,347 @@
+<title>Runner24 Delivery</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one phone-width app column — sticky header (town + clock), tab bar, scrolling screen. Pine-night ground, headlight-amber accent. */
+:root{
+  --bg:#eef2ef; --surface:#ffffff; --sunk:#e2e9e4; --fg:#14211b; --muted:#56675e; --line:#cdd8d1;
+  --accent:#c77a12; --accent-ink:#ffffff; --pine:#1d4a37;
+  --ok:#2c7a4b; --warn:#a9620a; --bad:#b3372b; --ok-bg:#dcefe3; --warn-bg:#f8ead3; --bad-bg:#f6dcd8;
+  --display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0c1511; --surface:#14211b; --sunk:#0f1a15; --fg:#e6eee9; --muted:#93a69b; --line:#24372d;
+  --accent:#f0a33a; --accent-ink:#1a1206; --pine:#9fd1b6;
+  --ok:#6fcf97; --warn:#f0b35a; --bad:#f08a7e; --ok-bg:#163223; --warn-bg:#33260f; --bad-bg:#3a1a16; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1511; --surface:#14211b; --sunk:#0f1a15; --fg:#e6eee9; --muted:#93a69b; --line:#24372d;
+  --accent:#f0a33a; --accent-ink:#1a1206; --pine:#9fd1b6;
+  --ok:#6fcf97; --warn:#f0b35a; --bad:#f08a7e; --ok-bg:#163223; --warn-bg:#33260f; --bad-bg:#3a1a16; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.app{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:1.45rem;letter-spacing:-.01em} h2{font-size:1.15rem} h3{font-size:1rem}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.muted{color:var(--muted)} .small{font-size:.85rem}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;display:grid;gap:10px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo{display:flex;align-items:baseline;gap:6px}
+.logo b{font-family:var(--display);font-size:1.5rem;letter-spacing:-.02em}
+.logo span{font-family:var(--mono);font-size:.8rem;background:var(--accent);color:var(--accent-ink);padding:1px 6px;border-radius:4px}
+.ctx{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ctx label{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.ctx select,.ctx input[type=range]{accent-color:var(--accent)}
+select,input[type=text],input[type=date],input[type=number],textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0}
+.clock{font-family:var(--mono);font-size:.95rem;padding:3px 8px;border-radius:6px;background:var(--sunk)}
+.proto{font-size:.75rem;color:var(--muted);border:1px dashed var(--line);border-radius:6px;padding:4px 8px}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+nav.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs button{background:none;border:0;padding:10px 4px 12px;font-size:.78rem;color:var(--muted);display:grid;gap:2px;justify-items:center}
+nav.tabs button i{font-style:normal;font-family:var(--display);font-size:1.05rem}
+nav.tabs button[aria-selected=true]{color:var(--fg);font-weight:700;box-shadow:inset 0 3px 0 var(--accent)}
+.badge-count{font-family:var(--mono);font-size:.7rem;background:var(--accent);color:var(--accent-ink);border-radius:9px;padding:0 6px}
+
+section.screen{display:grid;gap:16px;padding-top:16px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:.88rem}
+.chip[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.store{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.store-head{padding:12px 14px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;border-bottom:1px solid var(--line)}
+.store-head > div{min-width:0}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.tag{font-size:.72rem;font-weight:700;letter-spacing:.03em;padding:2px 7px;border-radius:5px;background:var(--sunk);color:var(--muted)}
+.tag.age{background:var(--warn-bg);color:var(--warn)}
+.tag.open{background:var(--ok-bg);color:var(--ok)}
+.tag.closed{background:var(--bad-bg);color:var(--bad)}
+.items{display:grid}
+.item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item > div{min-width:0}
+.price{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.add{border:1px solid var(--accent);background:transparent;color:var(--fg);border-radius:8px;padding:5px 12px;font-weight:700}
+.add:disabled{border-color:var(--line);color:var(--muted);cursor:not-allowed}
+.closed-note{padding:10px 14px;background:var(--bad-bg);color:var(--bad);font-size:.85rem}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.row > span:first-child{min-width:0}
+.pending{color:var(--warn);font-size:.85rem;font-weight:700}
+.btn{border:0;border-radius:10px;padding:12px 16px;font-weight:700;background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-size:1rem}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{width:28px;height:28px;border-radius:7px;border:1px solid var(--line);background:var(--sunk)}
+.notice{border-radius:10px;padding:10px 12px;font-size:.88rem;background:var(--warn-bg);color:var(--fg);border:1px solid var(--line)}
+.notice b{color:var(--warn)}
+.field{display:grid;gap:4px}
+.field label{font-size:.85rem;font-weight:700}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px;font-size:.88rem}
+.seg button[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:700}
+
+.steps{display:grid;gap:0;list-style:none;margin:0;padding:0}
+.steps li{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:6px 0;color:var(--muted)}
+.steps li::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid var(--line);margin:5px 0 0 3px}
+.steps li.done{color:var(--fg)} .steps li.done::before{background:var(--ok);border-color:var(--ok)}
+.steps li.now{color:var(--fg);font-weight:700} .steps li.now::before{background:var(--accent);border-color:var(--accent)}
+.check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+.check:first-of-type{border-top:0}
+.check input{width:20px;height:20px;accent-color:var(--ok);flex:none;margin-top:2px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:.85rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+
+/* Age gate */
+.gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.gate .card{max-width:400px;width:100%;display:grid;gap:14px}
+.gate h1{font-size:2rem}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:.9rem;z-index:15;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.toast{transition:opacity .2s}}
+</style>
+
+<div class="gate" id="gate">
+  <div class="card">
+    <div class="logo"><b>Runner24</b><span>24/7</span></div>
+    <h1>Anything, any hour, across Siskiyou County.</h1>
+    <p class="muted">Some items need ID. Enter your date of birth to see what you can order. Your driver checks your ID again at the door.</p>
+    <div class="field"><label for="dob">Date of birth</label><input type="date" id="dob" value="1990-06-15"></div>
+    <p class="small muted" id="gateMsg">Sample date filled in for the demo.</p>
+    <button class="btn" id="enter">Continue</button>
+    <p class="proto">Prototype with sample stores and prices. No real orders or payments.</p>
+  </div>
+</div>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo"><b>Runner24</b><span>24/7</span></div>
+      <span class="clock num" id="clockLabel">23:00</span>
+    </div>
+    <div class="ctx">
+      <label for="town">Deliver to
+        <select id="town"></select>
+      </label>
+      <label for="hour">Demo time
+        <input type="range" id="hour" min="0" max="23" value="23">
+      </label>
+    </div>
+  </header>
+
+  <main id="main"></main>
+</div>
+
+<nav class="tabs"><div role="tablist">
+  <button role="tab" data-tab="shop" aria-selected="true"><i>Shop</i>Stores</button>
+  <button role="tab" data-tab="anything" aria-selected="false"><i>Any</i>Errand</button>
+  <button role="tab" data-tab="cart" aria-selected="false"><i id="cartTab">Cart</i>Checkout</button>
+  <button role="tab" data-tab="driver" aria-selected="false"><i>Drive</i>Driver</button>
+  <button role="tab" data-tab="admin" aria-selected="false"><i>Ops</i>Admin</button>
+</div></nav>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ---------- PRICING: NOT SET. Every fee waits on owner approval. ---------- */
+const FEES = { approved:false, delivery:null, perMile:null, service:null, overnight:null, idCheck:null, smallOrder:null, errandShopping:null };
+
+/* Category rules. Hours are [open, close) in 24h; close past midnight wraps. Legal notes are a read of CA rules, to be confirmed by counsel. */
+const CATS = {
+  alcohol:  {name:"Alcohol",        age:21, hours:[6,2],  rule:"CA bans alcohol sales 2am–6am. Licensed store must hold the license; driver checks ID at handoff."},
+  tobacco:  {name:"Tobacco & vape", age:21, hours:null,   rule:"CA flavored-tobacco ban: unflavored/tobacco-flavor only. Federal PACT Act rules apply to delivery sales; adult ID at door."},
+  cannabis: {name:"Cannabis",       age:21, hours:[6,22], rule:"Licensed-retailer delivery only, 6am–10pm (DCC). Hemp THC products are being phased out in CA; CBD with no THC stays."},
+  adult:    {name:"Adult & novelty",age:18, hours:null,   rule:"18+ gate, discreet bag, no labels on the outside."},
+  everyday: {name:"Everyday",       age:0,  hours:null,   rule:"Snacks, OTC meds, phone chargers, auto parts. Open 24/7."},
+};
+const TOWNS = [["Yreka",0],["Montague",6],["Grenada",11],["Weed",28],["Mount Shasta",36],["McCloud",46],["Dunsmuir",43],["Fort Jones",17],["Etna",29],["Happy Camp",72],["Dorris",50],["Tulelake",88]];
+/* Fictional sample stores. supply: partner | runner | own */
+const STORES = [
+  {id:"s1",name:"North Valley Liquor & Mart",town:"Yreka",supply:"partner",cats:["alcohol","everyday"],items:[
+    ["Local IPA 6-pack","alcohol",13.99],["Cabernet 750ml","alcohol",16.49],["Ice 10lb","everyday",4.29],["Tortilla chips","everyday",4.99]]},
+  {id:"s2",name:"Ridge Smoke & Vape",town:"Weed",supply:"partner",cats:["tobacco","adult"],items:[
+    ["Tobacco-flavor vape pod 2pk","tobacco",19.99],["Rolling papers","tobacco",2.99],["Glass pipe","adult",24.00]]},
+  {id:"s3",name:"Cascade Green (licensed)",town:"Mount Shasta",supply:"partner",cats:["cannabis"],items:[
+    ["Pre-roll 1g","cannabis",12.00],["Gummies 100mg","cannabis",22.00],["CBD tincture (0 THC)","cannabis",34.00]]},
+  {id:"s4",name:"After Dark Boutique",town:"Yreka",supply:"partner",cats:["adult"],items:[
+    ["Massage oil","adult",18.00],["Novelty gift box","adult",29.00],["Party supplies kit","adult",15.00]]},
+  {id:"s5",name:"Runner24 Stock Room",town:"Yreka",supply:"own",cats:["everyday","adult"],items:[
+    ["Phone charger USB-C","everyday",9.00],["Pain reliever 50ct","everyday",7.50],["Energy drink 4pk","everyday",8.00],["Liquidation mystery box","everyday",25.00]]},
+];
+const SUPPLY = {partner:"Partner store",runner:"Runner buys it",own:"Our stock"};
+
+const state = {tab:"shop", cat:"all", age:0, town:"Yreka", hour:23, cart:{}, orders:[], errand:{store:"",list:"",est:""}, driverChecks:{}};
+const $ = s => document.querySelector(s);
+const money = n => "$" + n.toFixed(2);
+const fmtHour = h => String(h).padStart(2,"0") + ":00";
+
+function isOpen(cat, h){
+  const hrs = CATS[cat].hours; if(!hrs) return true;
+  const [o,c] = hrs; return o < c ? (h>=o && h<c) : (h>=o || h<c);
+}
+function hoursText(cat){ const h=CATS[cat].hours; return h ? `${fmtHour(h[0])}–${fmtHour(h[1])}` : "24/7"; }
+function canBuy(cat){ return state.age >= CATS[cat].age; }
+function itemKey(sid,i){ return sid+":"+i; }
+function findItem(key){ const [sid,i]=key.split(":"); const s=STORES.find(x=>x.id===sid); const it=s.items[+i]; return {store:s,name:it[0],cat:it[1],price:it[2]}; }
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2200); }
+function cartCount(){ return Object.values(state.cart).reduce((a,b)=>a+b,0); }
+
+/* ---------- Screens ---------- */
+function renderShop(){
+  const chips = ["all",...Object.keys(CATS)].map(c=>`<button class="chip" aria-pressed="${state.cat===c}" data-cat="${c}">${c==="all"?"All":CATS[c].name}</button>`).join("");
+  const stores = STORES.filter(s=>state.cat==="all"||s.cats.includes(state.cat)).map(s=>{
+    const dist = Math.abs(TOWNS.find(t=>t[0]===state.town)[1]-TOWNS.find(t=>t[0]===s.town)[1]);
+    const items = s.items.map((it,i)=>{
+      const [name,cat,price]=it, open=isOpen(cat,state.hour), ok=canBuy(cat);
+      const why = !ok ? `${CATS[cat].age}+ only` : !open ? `Opens ${fmtHour(CATS[cat].hours[0])}` : "Add";
+      return `<div class="item"><div><div>${name}</div><div class="tags">${CATS[cat].age?`<span class="tag age">${CATS[cat].age}+ ID</span>`:""}<span class="price small muted">${money(price)} shelf</span></div></div>
+        <button class="add" data-add="${itemKey(s.id,i)}" ${(!open||!ok)?"disabled":""}>${why}</button></div>`;
+    }).join("");
+    const anyClosed = s.items.some(it=>!isOpen(it[1],state.hour));
+    return `<article class="store"><div class="store-head"><div><h3>${s.name}</h3>
+      <div class="tags"><span class="tag">${SUPPLY[s.supply]}</span><span class="tag">${s.town}</span><span class="tag num">~${dist} mi</span></div></div>
+      <span class="tag ${anyClosed?"closed":"open"}">${anyClosed?"Partly closed":"Open now"}</span></div>
+      ${anyClosed?`<div class="closed-note">Some items can't be delivered at ${fmtHour(state.hour)} under California law. They come back at the listed hour.</div>`:""}
+      <div class="items">${items}</div></article>`;
+  }).join("");
+  return `<section class="screen"><div><p class="eyebrow">Delivering to ${state.town}</p><h1>What do you need tonight?</h1></div>
+    <div class="chips" role="group" aria-label="Categories">${chips}</div>${stores}
+    <div class="panel"><h3>Don't see it?</h3><p class="muted small">Send a runner to any open store for anything legal.</p><button class="btn ghost" data-go="anything">Start an errand</button></div></section>`;
+}
+
+function renderAnything(){
+  const e=state.errand;
+  return `<section class="screen"><div><p class="eyebrow">Errand mode</p><h1>Name it. A runner buys it and brings it.</h1></div>
+    <div class="panel">
+      <div class="field"><label for="eStore">Which store? (or "any open store")</label><input type="text" id="eStore" value="${e.store||"Any open store in Yreka"}"></div>
+      <div class="field"><label for="eList">What to buy</label><textarea id="eList" rows="4">${e.list||"2x car jumper cables\nPhone charger (Lightning)\nBag of ice"}</textarea></div>
+      <div class="field"><label for="eEst">Your estimate of item cost</label><input type="number" id="eEst" min="0" step="1" value="${e.est||45}"></div>
+      <div class="notice"><b>How payment works:</b> we hold the item estimate plus a buffer on your card, the runner pays at the store, and you're charged the receipt total. The errand fee is not set yet.</div>
+      <div class="notice"><b>Not allowed:</b> anything illegal, prescription drugs, firearms or ammo, or alcohol and cannabis outside licensed stores and legal hours.</div>
+      <button class="btn" id="sendErrand">Send errand request</button>
+    </div></section>`;
+}
+
+function renderCart(){
+  const keys=Object.keys(state.cart);
+  if(!keys.length) return `<section class="screen"><h1>Your cart is empty</h1><p class="muted">Pick something from a store or start an errand.</p><button class="btn" data-go="shop">Browse stores</button>${renderOrders()}</section>`;
+  let sub=0, restricted=false;
+  const lines=keys.map(k=>{const it=findItem(k),q=state.cart[k];sub+=it.price*q;if(CATS[it.cat].age)restricted=true;
+    return `<div class="row"><span>${it.name}<br><span class="small muted">${it.store.name}</span></span><span class="qty"><button data-dec="${k}" aria-label="Remove one">−</button><span class="num">${q}</span><button data-inc="${k}" aria-label="Add one">+</button><span class="price">${money(it.price*q)}</span></span></div>`}).join("");
+  const overnight = state.hour>=22||state.hour<6;
+  const fee = (label,on=true)=> on?`<div class="row"><span>${label}</span><span class="pending">Pending approval</span></div>`:"";
+  return `<section class="screen"><h1>Checkout</h1>
+    <div class="panel">${lines}</div>
+    <div class="panel">
+      <div class="row"><span>Items (shelf price)</span><span class="price">${money(sub)}</span></div>
+      ${fee("Delivery fee")}${fee("Service fee")}${fee("Overnight fee (10pm–6am)",overnight)}${fee("ID check fee",restricted)}${fee("Small order fee",sub<15)}
+      <div class="row"><span>Driver tip</span><span class="seg" id="tips">${[0,3,5,8].map(t=>`<button aria-pressed="${t===5}" data-tip="${t}">$${t}</button>`).join("")}</span></div>
+      <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
+      <div class="row"><strong>Total</strong><span class="pending">Items ${money(sub)} + fees not set</span></div>
+    </div>
+    ${restricted?`<div class="notice"><b>ID required at the door.</b> The person who ordered must be there with a valid photo ID. If no one can show ID, the driver brings the order back.</div>`:""}
+    <button class="btn" id="place">Place demo order</button>
+    ${renderOrders()}</section>`;
+}
+
+function renderOrders(){
+  if(!state.orders.length) return "";
+  const steps=["Order received","Store packing","Runner on the way","ID check at door","Delivered"];
+  return `<h2>Your orders</h2>`+state.orders.slice().reverse().map(o=>`<div class="panel"><div class="row"><strong>#${o.id}</strong><span class="small muted">${o.kind} · ${fmtHour(o.hour)}</span></div>
+    <ol class="steps">${steps.map((s,i)=>`<li class="${i<o.step?"done":i===o.step?"now":""}">${s}</li>`).join("")}</ol></div>`).join("");
+}
+
+function renderDriver(){
+  const o=state.orders.find(x=>x.step<4);
+  if(!o) return `<section class="screen"><p class="eyebrow">Driver view</p><h1>No active runs</h1><p class="muted">Place a demo order or errand to see the driver flow.</p></section>`;
+  const checks=o.restricted?["Scan ID: not expired, matches order name","Age on ID meets the item's limit","Face matches the photo","Customer isn't visibly intoxicated","Not handing to a minor or a third party"]:["Confirm address and name"];
+  const c=state.driverChecks[o.id]||{};
+  const all=checks.every((_,i)=>c[i]);
+  return `<section class="screen"><p class="eyebrow">Driver view · Run #${o.id}</p><h1>${o.kind==="Errand"?"Buy, then deliver":"Pick up, then deliver"}</h1>
+    <div class="panel"><div class="row"><span>Drop-off</span><strong>${o.town}</strong></div><div class="row"><span>Items</span><span>${o.summary}</span></div>
+    <div class="row"><span>Driver pay</span><span class="pending">Pending approval</span></div></div>
+    <div class="panel"><h3>${o.restricted?"Door checklist (required)":"Handoff"}</h3>
+      ${checks.map((t,i)=>`<label class="check"><input type="checkbox" data-chk="${o.id}:${i}" ${c[i]?"checked":""}><span>${t}</span></label>`).join("")}</div>
+    <div class="seg"><button class="btn" id="advance" ${o.step===3&&!all?"disabled":""}>${["Confirm order","Picked up","Arrived at door","Complete handoff"][o.step]}</button>
+    ${o.restricted&&o.step===3?`<button class="btn ghost" id="refuse">Refuse: no valid ID</button>`:""}</div></section>`;
+}
+
+function renderAdmin(){
+  const rows=Object.entries(CATS).map(([k,c])=>`<tr><td><strong>${c.name}</strong></td><td class="num">${c.age||"—"}</td><td class="num">${hoursText(k)}</td><td><span class="tag ${isOpen(k,state.hour)?"open":"closed"}">${isOpen(k,state.hour)?"Selling":"Blocked"}</span></td><td>${c.rule}</td></tr>`).join("");
+  const feeRows=Object.entries(FEES).filter(([k])=>k!=="approved").map(([k])=>`<div class="row"><span>${k.replace(/([A-Z])/g," $1").replace(/^./,m=>m.toUpperCase())}</span><span class="pending">Not set</span></div>`).join("");
+  return `<section class="screen"><p class="eyebrow">Operations</p><h1>Rules engine</h1>
+    <p class="muted small">At ${fmtHour(state.hour)}, these are the rules the app enforces. Move the demo time slider to watch categories open and close.</p>
+    <div class="tablewrap"><table><thead><tr><th>Category</th><th>Age</th><th>Hours</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="panel"><h3>Supply models</h3>
+      <div class="row"><span>Partner store</span><span class="small muted">Store lists stock; we take a commission</span></div>
+      <div class="row"><span>Runner buys it</span><span class="small muted">Runner pays at the counter; customer pays the receipt plus fees</span></div>
+      <div class="row"><span>Our stock</span><span class="small muted">We hold inventory; full retail margin</span></div></div>
+    <div class="panel"><h3>Pricing</h3><p class="small muted">Every fee is off until you approve the pricing plan.</p>${feeRows}</div>
+    <div class="panel"><h3>Orders today</h3>${state.orders.length?state.orders.map(o=>`<div class="row"><span>#${o.id} · ${o.kind} · ${o.town}</span><span class="tag ${o.refused?"closed":o.step>=4?"open":""}">${o.refused?"Refused":o.step>=4?"Delivered":"Active"}</span></div>`).join(""):`<p class="muted small">No orders yet.</p>`}</div>
+    <p class="small muted">Legal notes are a working read of California rules, not legal advice. Confirm with a CA alcohol and cannabis attorney before launch.</p></section>`;
+}
+
+/* ---------- Render + events ---------- */
+function render(){
+  $("#clockLabel").textContent=fmtHour(state.hour);
+  const n=cartCount(); $("#cartTab").innerHTML=n?`Cart <span class="badge-count">${n}</span>`:"Cart";
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===state.tab));
+  $("#main").innerHTML={shop:renderShop,anything:renderAnything,cart:renderCart,driver:renderDriver,admin:renderAdmin}[state.tab]();
+}
+
+function placeOrder(kind,summary,restricted){
+  const o={id:1040+state.orders.length+1,kind,summary,restricted,town:state.town,hour:state.hour,step:0};
+  state.orders.push(o); return o;
+}
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button"); if(!t) return;
+  if(t.dataset.tab){state.tab=t.dataset.tab;render();window.scrollTo(0,0);return;}
+  if(t.dataset.go){state.tab=t.dataset.go;render();window.scrollTo(0,0);return;}
+  if(t.dataset.cat){state.cat=t.dataset.cat;render();return;}
+  if(t.dataset.add){state.cart[t.dataset.add]=(state.cart[t.dataset.add]||0)+1;toast("Added to cart");render();return;}
+  if(t.dataset.inc){state.cart[t.dataset.inc]++;render();return;}
+  if(t.dataset.dec){if(--state.cart[t.dataset.dec]<=0)delete state.cart[t.dataset.dec];render();return;}
+  if(t.dataset.tip){t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t));return;}
+  if(t.id==="place"){
+    const keys=Object.keys(state.cart);
+    const blocked=keys.filter(k=>!isOpen(findItem(k).cat,state.hour));
+    if(blocked.length){toast(`${findItem(blocked[0]).name} can't be delivered at ${fmtHour(state.hour)}`);return;}
+    const restricted=keys.some(k=>CATS[findItem(k).cat].age>0);
+    placeOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),restricted);
+    state.cart={};toast("Demo order placed");render();return;
+  }
+  if(t.id==="sendErrand"){
+    state.errand={store:$("#eStore").value,list:$("#eList").value,est:$("#eEst").value};
+    if(!state.errand.list.trim()){toast("Add at least one item to buy");return;}
+    placeOrder("Errand",state.errand.list.split("\n").filter(Boolean).join(", "),false);
+    state.tab="cart";toast("Errand sent to nearby runners");render();return;
+  }
+  if(t.id==="advance"){const o=state.orders.find(x=>x.step<4);o.step++;toast(o.step>=4?"Delivered":"Status updated");render();return;}
+  if(t.id==="refuse"){const o=state.orders.find(x=>x.step<4);o.step=4;o.refused=true;toast("Refused. Return items to the store.");render();return;}
+});
+document.addEventListener("change",e=>{
+  const c=e.target.dataset&&e.target.dataset.chk;
+  if(c){const [id,i]=c.split(":");(state.driverChecks[id]=state.driverChecks[id]||{})[i]=e.target.checked;render();}
+});
+$("#hour").addEventListener("input",e=>{state.hour=+e.target.value;render();});
+$("#town").innerHTML=TOWNS.map(t=>`<option>${t[0]}</option>`).join("");
+$("#town").addEventListener("change",e=>{state.town=e.target.value;render();});
+$("#enter").addEventListener("click",()=>{
+  const v=$("#dob").value; if(!v){$("#gateMsg").textContent="Enter your date of birth to continue.";return;}
+  const d=new Date(v), now=new Date(); let a=now.getFullYear()-d.getFullYear(); if(now<new Date(now.getFullYear(),d.getMonth(),d.getDate()))a--;
+  if(a<18){$("#gateMsg").textContent="You need to be 18 or older to use Runner24.";return;}
+  state.age=a; $("#gate").hidden=true; render();
+});
+render();
+</script>
