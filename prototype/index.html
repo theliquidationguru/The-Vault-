@@ -1,4 +1,4 @@
-<title>Runner24 Delivery</title>
+<title>Rebu</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -123,7 +123,7 @@ tr:last-child td{border-bottom:0}
 
 <div class="gate" id="gate">
   <div class="card">
-    <div class="logo"><b>Runner24</b><span>24/7</span></div>
+    <div class="logo"><b>Rebu</b><span>24/7</span></div>
     <h1>Anything, any hour, across Siskiyou County.</h1>
     <p class="muted">Some items need ID. Enter your date of birth to see what you can order. Your driver checks your ID again at the door.</p>
     <div class="field"><label for="dob">Date of birth</label><input type="date" id="dob" value="1990-06-15"></div>
@@ -138,7 +138,7 @@ tr:last-child td{border-bottom:0}
 <div class="app">
   <header class="top">
     <div class="brand">
-      <div class="logo"><b>Runner24</b><span>24/7</span></div>
+      <div class="logo"><b>Rebu</b><span>24/7</span></div>
       <span class="clock num" id="clockLabel">23:00</span>
     </div>
     <div class="ctx">
@@ -172,6 +172,7 @@ const PRICING = {
   markup: 2,                 // non-licensed items: shelf price × 2
   perMile: 2.00,             // store → customer, one way
   minMiles: 3,               // in-town trips counted as 3 mi (placeholder until real routing)
+  memberDayMileFactor: .5,   // paid members pay half mileage 6am–midnight; full rate midnight–6am
   licensedFeeDay: 10,        // alcohol/tobacco/cannabis: no markup, flat fee 6am–midnight
   licensedFeeNight: 25,      // same, midnight–6am
 };
@@ -194,7 +195,7 @@ const CATS = {
 const TOWNS = [["Yreka",0],["Montague",6],["Grenada",11],["Weed",28],["Mount Shasta",36],["McCloud",46],["Dunsmuir",43],["Fort Jones",17],["Etna",29],["Happy Camp",72],["Dorris",50],["Tulelake",88]];
 /* Fictional sample stores. Item prices are the store's shelf price. supply: partner | runner | own */
 const STORES = [
-  {id:"s5",name:"Runner24 Stock Room",town:"Yreka",supply:"own",cats:["everyday"],items:[
+  {id:"s5",name:"Rebu Stock Room",town:"Yreka",supply:"own",cats:["everyday"],items:[
     ["Phone charger USB-C","everyday",9.00],["Pain reliever 50ct","everyday",7.50],["Energy drink 4pk","everyday",8.00],["Liquidation mystery box","everyday",25.00]]},
   {id:"s1",name:"North Valley Liquor & Mart",town:"Yreka",supply:"partner",cats:["alcohol","everyday"],items:[
     ["Local IPA 6-pack","alcohol",13.99],["Cabernet 750ml","alcohol",16.49],["Ice 10lb","everyday",4.29],["Tortilla chips","everyday",4.99]]},
@@ -222,6 +223,8 @@ function hoursText(cat){ const h=CATS[cat].hours; return h ? `${fmtHour(h[0])}�
 function townMi(a,b){ return Math.abs(TOWNS.find(t=>t[0]===a)[1]-TOWNS.find(t=>t[0]===b)[1]); }
 function billMiles(a,b){ return Math.max(PRICING.minMiles, townMi(a,b)); }
 function ourPrice(cat, shelf){ return CATS[cat].licensed ? shelf : r2(shelf*PRICING.markup); }
+function isNight(h){ return h<6; }
+function mileRate(h){ return (tier().price && !isNight(h)) ? PRICING.perMile*PRICING.memberDayMileFactor : PRICING.perMile; }
 function licensedFee(h){ return h<6 ? PRICING.licensedFeeNight : PRICING.licensedFeeDay; }
 function blockReason(cat){
   const c=CATS[cat];
@@ -241,7 +244,7 @@ function quote(lines, legs, hour){
   const items = r2(lines.reduce((a,l)=>a+l.amount,0));
   const licensedItems = r2(lines.filter(l=>l.licensed).reduce((a,l)=>a+l.amount,0));
   const markupPart = r2(lines.filter(l=>!l.licensed&&l.markup).reduce((a,l)=>a+l.amount/2,0));
-  const mileage = r2(legs.reduce((a,l)=>a+l.miles*PRICING.perMile,0));
+  const mileage = r2(legs.reduce((a,l)=>a+l.miles*mileRate(hour),0));
   const special = lines.some(l=>l.licensed) ? licensedFee(hour) : 0;
   const t = tier();
   let discountBase = 0;
@@ -254,7 +257,7 @@ function quote(lines, legs, hour){
 }
 function quoteRows(q, legs){
   return `<div class="row"><span>Items</span><span class="price">${money(q.items)}</span></div>
-    ${legs.map(l=>`<div class="row"><span>Mileage: ${l.label} <span class="muted small num">${l.miles} mi × $${PRICING.perMile.toFixed(2)}</span></span><span class="price">${money(l.miles*PRICING.perMile)}</span></div>`).join("")}
+    ${legs.map(l=>`<div class="row"><span>Mileage: ${l.label} <span class="muted small num">${l.miles} mi × $${mileRate(state.hour).toFixed(2)}${mileRate(state.hour)<PRICING.perMile?" member day rate":""}</span></span><span class="price">${money(l.miles*mileRate(state.hour))}</span></div>`).join("")}
     ${q.special?`<div class="row"><span>Licensed-item delivery <span class="muted small">${state.hour<6?"midnight–6am":"daytime"}</span></span><span class="price">${money(q.special)}</span></div>`:""}
     ${q.discount?`<div class="row discount"><span>${q.t.name} discount ${Math.round(q.t.discount*100)}% <span class="small">${q.t.discountOn==="order"?"off order":"off delivery charges"}</span></span><span class="price">−${money(q.discount)}</span></div>`:""}
     <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
@@ -275,7 +278,7 @@ function renderShop(){
     const anyClosed = s.items.some(it=>!isOpen(it[1],state.hour));
     const locked = tier().level < lockedLevel;
     return `<article class="store"><div class="store-head"><div><h3>${s.name}</h3>
-      <div class="tags"><span class="tag">${SUPPLY[s.supply]}</span><span class="tag">${s.town}</span><span class="tag num">${mi} mi · ${money(mi*PRICING.perMile)}</span></div></div>
+      <div class="tags"><span class="tag">${SUPPLY[s.supply]}</span><span class="tag">${s.town}</span><span class="tag num">${mi} mi · ${money(mi*mileRate(state.hour))}</span></div></div>
       <span class="tag ${anyClosed?"closed":"open"}">${anyClosed?"Partly closed":"Open now"}</span></div>
       ${locked?`<div class="lock"><span>Needs the ${TIERS.find(t=>t.level===lockedLevel).name} plan or higher.</span><button class="add" data-tierset="${TIERS.find(t=>t.level===lockedLevel).id}">Upgrade</button></div>`:""}
       ${anyClosed?`<div class="closed-note">Some items can't be delivered at ${fmtHour(state.hour)} under California law. They come back at the listed hour.</div>`:""}
@@ -371,7 +374,9 @@ function renderAdmin(){
       <div class="row"><span>Everyday, adult, errands</span><span>Shelf price × 2</span></div>
       <div class="row"><span>Alcohol, tobacco, cannabis</span><span>Store price, no markup</span></div>
       <div class="row"><span>Licensed delivery fee</span><span class="num">$10 day · $25 midnight–6am</span></div>
-      <div class="row"><span>Mileage, store → customer</span><span class="num">$2.00/mi, 3 mi minimum</span></div></div>
+      <div class="row"><span>Mileage, store → customer</span><span class="num">$2.00/mi, 3 mi minimum</span></div>
+      <div class="row"><span>Members, 6am–midnight</span><span class="num">$1.00/mi (half)</span></div>
+      <div class="row"><span>Members, midnight–6am</span><span class="num">$2.00/mi (full)</span></div></div>
     <div class="tablewrap"><table style="min-width:420px"><thead><tr><th>Plan</th><th>Price</th><th>Includes</th></tr></thead><tbody>${tierRows}</tbody></table></div>
     <p class="muted small">At ${fmtHour(state.hour)}, these are the rules the app enforces. Move the demo time slider to watch categories open and close.</p>
     <div class="tablewrap"><table style="min-width:720px"><thead><tr><th>Category</th><th>Plan</th><th>Age</th><th>Hours</th><th>Price</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -453,7 +458,7 @@ renderGatePlans();
 $("#enter").addEventListener("click",()=>{
   const v=$("#dob").value; if(!v){$("#gateMsg").textContent="Enter your date of birth to continue.";return;}
   const d=new Date(v), now=new Date(); let a=now.getFullYear()-d.getFullYear(); if(now<new Date(now.getFullYear(),d.getMonth(),d.getDate()))a--;
-  if(a<18){$("#gateMsg").textContent="You need to be 18 or older to use Runner24.";return;}
+  if(a<18){$("#gateMsg").textContent="You need to be 18 or older to use Rebu.";return;}
   state.age=a; $("#gate").hidden=true; render();
 });
 render();
