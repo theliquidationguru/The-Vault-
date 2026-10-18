@@ -179,6 +179,7 @@ const PRICING = {
    // paid members pay half mileage 6am–midnight; full rate midnight–6am
   licensedFeeDay: 10,        // alcohol/tobacco/cannabis: no markup, flat fee 6am–midnight
   licensedFeeNight: 25,      // same, midnight–6am
+  licensedAdminFee: 5,       // per order containing any licensed item; 100% Rebu, never discounted, applies to negotiated orders too
 };
 /* Membership tiers. level gates categories; discount applies to `discountOn`. */
 const TIERS = [
@@ -250,20 +251,22 @@ function quote(lines, legs, hour){
   const markupPart = r2(lines.filter(l=>!l.licensed&&l.markup).reduce((a,l)=>a+l.amount/2,0));
   const mileage = r2(legs.reduce((a,l)=>a+l.miles*mileRate(hour),0));
   const special = lines.some(l=>l.licensed) ? licensedFee(hour) : 0;
+  const admin = lines.some(l=>l.licensed) ? PRICING.licensedAdminFee : 0;
   const t = tier();
   let discountBase = 0;
   if(t.discountOn==="service") discountBase = mileage + special;
   if(t.discountOn==="order") discountBase = (items - licensedItems) + mileage + special;
   const discount = r2(discountBase * t.discount);
-  const total = r2(items + mileage + special - discount);
+  const total = r2(items + mileage + special + admin - discount);
   const cost = r2(items - markupPart); // what we pay stores and runners
   const driverPay = r2(mileage*PRICING.driverMileShare);
-  return {items, mileage, special, discount, total, driverPay, ourTake:r2(total-cost-driverPay), t};
+  return {items, mileage, special, admin, discount, total, driverPay, ourTake:r2(total-cost-driverPay), t};
 }
 function quoteRows(q, legs){
   return `<div class="row"><span>Items</span><span class="price">${money(q.items)}</span></div>
     ${legs.map(l=>`<div class="row"><span>Mileage: ${l.label} <span class="muted small num">${l.miles} mi × $${mileRate(state.hour).toFixed(2)}${mileRate(state.hour)<PRICING.perMile?" member day rate":""}</span></span><span class="price">${money(l.miles*mileRate(state.hour))}</span></div>`).join("")}
     ${q.special?`<div class="row"><span>Licensed-item delivery <span class="muted small">${state.hour<6?"midnight–6am":"daytime"}</span></span><span class="price">${money(q.special)}</span></div>`:""}
+    ${q.admin?`<div class="row"><span>Licensed-item admin fee <span class="muted small">per order</span></span><span class="price">${money(q.admin)}</span></div>`:""}
     ${q.discount?`<div class="row discount"><span>${q.t.name} discount ${Math.round(q.t.discount*100)}% <span class="small">${q.t.discountOn==="order"?"off order":"off delivery charges"}</span></span><span class="price">−${money(q.discount)}</span></div>`:""}
     <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
     <div class="row"><strong>Total before tip</strong><strong class="price">${money(q.total)}</strong></div>`;
@@ -341,7 +344,7 @@ function renderCart(){
   return `<section class="screen"><h1>Checkout</h1>
     <div class="panel">${rows}</div>
     <div class="panel">${negPicker("s",q.mileage+q.special)}
-      ${state.negMode.s?negRows(q.items,state.negOffer.s,"Items"):quoteRows(q,legs)}
+      ${state.negMode.s?negRows(q.items,state.negOffer.s,"Items",q.admin):quoteRows(q,legs)}
       <div class="row"><span>Driver tip</span><span class="seg" id="tips">${[0,3,5,8].map(t=>`<button aria-pressed="${t===5}" data-tip="${t}">$${t}</button>`).join("")}</span></div>
       <p class="small muted">${tier().name}${tier().price?` membership billed monthly (${money(tier().price)}), not per order.`:" · upgrade for discounts and more categories."}</p>
     </div>
@@ -357,25 +360,26 @@ function negPicker(k,standard){
     <button data-negmode="${k}:1" aria-pressed="${state.negMode[k]}">Name your price</button></div></div>
     ${state.negMode[k]?`<div class="field"><label for="offer_${k}">Your offer for delivery</label><input type="number" id="offer_${k}" min="1" step="1" value="${state.negOffer[k]}"></div>`:""}`;
 }
-function negRows(itemsAmt,offer,label="Items (receipt × 2)"){
+function negRows(itemsAmt,offer,label="Items (receipt × 2)",admin=0){
   return `${itemsAmt?`<div class="row"><span>${label} <span class="small muted">fixed</span></span><span class="price">${money(itemsAmt)}</span></div>`:""}
     <div class="row"><span>Delivery (your offer)</span><span class="price">${money(+offer)}</span></div>
+    ${admin?`<div class="row"><span>Licensed-item admin fee <span class="muted small">per order</span></span><span class="price">${money(admin)}</span></div>`:""}
     <p class="small muted">Only the delivery price is negotiable. A driver can accept or counter. Plan discounts don't apply to negotiated deliveries.</p>
     <hr style="border:0;border-top:1px solid var(--line);width:100%;margin:0">
-    <div class="row"><strong>Total if accepted</strong><strong class="price">${money(itemsAmt+ +offer)}</strong></div>`;
+    <div class="row"><strong>Total if accepted</strong><strong class="price">${money(itemsAmt+ +offer+admin)}</strong></div>`;
 }
 function readOffers(){ ["e","c","s"].forEach(k=>{const el=$("#offer_"+k); if(el) state.negOffer[k]=Math.max(1,+el.value||1);}); }
 /* items = what the customer pays for products (fixed); itemCost = what we pay the store/receipt */
-function negOrder(kind,summary,items,itemCost,offer,miles,restricted=false){
+function negOrder(kind,summary,items,itemCost,offer,miles,restricted=false,admin=0){
   const o=placeOrder(kind,summary,restricted,{total:0,ourTake:0,driverPay:0},miles);
-  o.neg={amount:r2(offer),by:"customer",status:"offered",items:r2(items),itemCost:r2(itemCost)};
+  o.neg={amount:r2(offer),by:"customer",status:"offered",items:r2(items),itemCost:r2(itemCost),admin};
   settleNeg(o); return o;
 }
 function settleNeg(o){
   const n=o.neg, items=n.items;
-  o.total=r2(items+n.amount);
+  o.total=r2(items+n.amount+n.admin);
   o.driverPay=r2(n.amount*(1-PRICING.negotiatedFeeShare));
-  o.ourTake=r2((items-n.itemCost)+n.amount*PRICING.negotiatedFeeShare);
+  o.ourTake=r2((items-n.itemCost)+n.amount*PRICING.negotiatedFeeShare+n.admin);
 }
 function negStatus(o){
   const n=o.neg;
@@ -427,6 +431,7 @@ function renderAdmin(){
       <div class="row"><span>Everyday, adult, errands</span><span>Shelf price × 2</span></div>
       <div class="row"><span>Alcohol, tobacco, cannabis</span><span>Store price, no markup</span></div>
       <div class="row"><span>Licensed delivery fee</span><span class="num">$10 day · $25 midnight–6am</span></div>
+      <div class="row"><span>Licensed-item admin fee (Rebu)</span><span class="num">$5 per order, incl. negotiated</span></div>
       <div class="row"><span>Mileage, store → customer</span><span class="num">$2.00/mi, 3 mi minimum</span></div>
       <div class="row"><span>Members, 6am–midnight</span><span class="num">$1.00/mi (half)</span></div>
       <div class="row"><span>Members, midnight–6am</span><span class="num">$2.00/mi (full)</span></div>
@@ -480,7 +485,7 @@ document.addEventListener("click",e=>{
     if(state.negMode.s){
       readOffers();
       const cost=r2(keys.reduce((a,k)=>{const it=findItem(k);return a+(CATS[it.cat].licensed?it.price:it.shelf)*state.cart[k];},0));
-      negOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),q.items,cost,state.negOffer.s,legs.reduce((a,l)=>a+l.miles,0),keys.some(k=>CATS[findItem(k).cat].age>0));
+      negOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),q.items,cost,state.negOffer.s,legs.reduce((a,l)=>a+l.miles,0),keys.some(k=>CATS[findItem(k).cat].age>0),q.admin);
       state.cart={};toast("Delivery offer sent to nearby drivers");render();return;
     }
     placeOrder("Store order",keys.map(k=>`${state.cart[k]}× ${findItem(k).name}`).join(", "),keys.some(k=>CATS[findItem(k).cat].age>0),q,legs.reduce((a,l)=>a+l.miles,0));

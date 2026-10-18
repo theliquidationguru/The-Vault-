@@ -25,6 +25,7 @@ Set in `PRICING` and `TIERS` at the top of the script in `index.html`.
 **Per order**
 - Everyday, adult/novelty and errand items: shelf price × 2.
 - Alcohol, tobacco and cannabis: the store's price with no markup (the licensed store stays the seller), plus a flat licensed-delivery fee of $10 from 6am to midnight or $25 from midnight to 6am.
+- Licensed-item admin fee: $5 per order that contains any alcohol, tobacco or cannabis. It goes 100% to Rebu, applies to negotiated orders too, and is never discounted.
 - Mileage: $2.00/mile, measured one way from the store to the customer. In-town trips count as 3 miles until real routing is added.
 - Paid members (Basic, Gold, Platinum) pay half mileage ($1.00/mile) from 6am to midnight, and the full $2.00/mile from midnight to 6am. Plan discounts apply on top.
 
