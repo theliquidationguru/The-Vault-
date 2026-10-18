@@ -1,0 +1,361 @@
+<title>Business HQ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one column of bands — money summary, attention row (inbox + questions), business table, ledger. Slate ground, deep-teal accent; status chips carry state. */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --sunk:#e8ecee; --fg:#15202b; --muted:#5a6873; --line:#d5dce0;
+  --accent:#0d6b63; --accent-ink:#ffffff; --accent-soft:#d6ebe8;
+  --good:#1f7a45; --good-bg:#dcf0e3; --warn:#9a5b00; --warn-bg:#f8ebd2; --bad:#b0302a; --bad-bg:#f7dcd9;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1418; --surface:#151e24; --sunk:#10181d; --fg:#e4ebef; --muted:#93a3ad; --line:#26333b;
+  --accent:#4cc2b5; --accent-ink:#06211e; --accent-soft:#143532;
+  --good:#6fd39a; --good-bg:#15301f; --warn:#f0b459; --warn-bg:#33270f; --bad:#f2877f; --bad-bg:#3a1916; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1418; --surface:#151e24; --sunk:#10181d; --fg:#e4ebef; --muted:#93a3ad; --line:#26333b;
+  --accent:#4cc2b5; --accent-ink:#06211e; --accent-soft:#143532;
+  --good:#6fd39a; --good-bg:#15301f; --warn:#f0b459; --warn-bg:#33270f; --bad:#f2877f; --bad-bg:#3a1916; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:grid;gap:22px}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:1.7rem;font-weight:800;letter-spacing:-.01em}
+h2{font-size:1.1rem;font-weight:600}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.muted{color:var(--muted)} .small{font-size:.85rem}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.btn{border:0;border-radius:8px;padding:9px 14px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:4px;min-width:0}
+.kpi .v{font-family:var(--mono);font-size:1.45rem;font-variant-numeric:tabular-nums}
+.kpi .v.neg{color:var(--bad)} .kpi .v.pos{color:var(--good)}
+.kpi .s{font-size:.8rem;color:var(--muted)}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.chip{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip.live{background:var(--good-bg);color:var(--good)}
+.chip.manual{background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+
+.list{display:grid;list-style:none;margin:0;padding:0}
+.list li{display:grid;grid-template-columns:1fr auto;gap:10px;padding:9px 0;border-top:1px solid var(--line);align-items:start}
+.list li:first-child{border-top:0}
+.list li > div{min-width:0}
+.list .subj{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list .from{font-size:.82rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--muted);font-size:.9rem;padding:6px 0}
+.note{font-size:.85rem;border-radius:8px;padding:9px 11px;background:var(--warn-bg);color:var(--fg)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.9rem}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+td.r,th.r{text-align:right}
+tr:last-child td{border-bottom:0}
+
+.spark{width:100%;height:56px;display:block}
+.spark path.area{fill:var(--accent-soft)} .spark path.line{fill:none;stroke:var(--accent);stroke-width:2}
+.spark circle{fill:var(--accent)}
+
+form.add{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:.8rem;font-weight:700}
+.field input,.field select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 9px;min-width:0;width:100%}
+.del{background:none;border:0;color:var(--muted);font-size:.85rem;text-decoration:underline}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div><p class="eyebrow">All businesses · last 30 days</p><h1>Business HQ</h1></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="small muted" id="updated">Connecting to your accounts…</span>
+      <button class="btn ghost" id="refresh">Refresh</button>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Summary">
+    <div class="kpi"><span class="eyebrow">Sales</span><span class="v" id="kSales">—</span><span class="s" id="kSalesS">All businesses</span></div>
+    <div class="kpi"><span class="eyebrow">Profit / loss</span><span class="v" id="kPL">—</span><span class="s">Sales minus logged costs</span></div>
+    <div class="kpi"><span class="eyebrow">Owed to you</span><span class="v" id="kOwedIn">—</span><span class="s">Open receivables</span></div>
+    <div class="kpi"><span class="eyebrow">You owe</span><span class="v" id="kOwedOut">—</span><span class="s">Open bills</span></div>
+    <div class="kpi"><span class="eyebrow">Unanswered email</span><span class="v" id="kMail">—</span><span class="s">Unread in Primary</span></div>
+    <div class="kpi"><span class="eyebrow">Visitors</span><span class="v" id="kVisits">—</span><span class="s">Tracked sites</span></div>
+  </section>
+
+  <div class="grid2">
+    <section class="panel" aria-labelledby="hQ">
+      <div class="panel-head"><h2 id="hQ">Customer questions</h2><span class="chip" id="qChip">Gmail</span></div>
+      <p class="small muted">Store help inbox, plus eBay and Mercari message emails, last 30 days.</p>
+      <ul class="list" id="qList"><li class="empty">Loading…</li></ul>
+    </section>
+    <section class="panel" aria-labelledby="hM">
+      <div class="panel-head"><h2 id="hM">Unanswered email</h2><span class="chip" id="mChip">Gmail</span></div>
+      <p class="small muted">Unread threads in your Primary inbox.</p>
+      <ul class="list" id="mList"><li class="empty">Loading…</li></ul>
+    </section>
+  </div>
+
+  <section class="grid2">
+    <div class="panel" aria-labelledby="hT">
+      <div class="panel-head"><h2 id="hT">Timberfalls visitors</h2><span class="chip" id="tChip">Shopify</span></div>
+      <div class="panel-head"><span class="num" style="font-size:1.3rem" id="tVisits">—</span><span class="small muted">sessions, last 30 days</span></div>
+      <svg class="spark" id="tSpark" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Daily sessions"></svg>
+    </div>
+    <div class="panel" aria-labelledby="hI">
+      <div class="panel-head"><h2 id="hI">Timberfalls inventory</h2><span class="chip" id="iChip">Shopify</span></div>
+      <div id="invBody" class="small muted">Loading…</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="hB" style="display:grid;gap:10px">
+    <div class="panel-head"><h2 id="hB">Businesses</h2><span class="small muted">New apps get added here as we build them.</span></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Business</th><th>Where data comes from</th><th class="r">Sales</th><th class="r">Costs</th><th class="r">Profit / loss</th><th class="r">Owed to you</th><th class="r">You owe</th><th class="r">Inventory value</th><th class="r">Visitors</th></tr></thead>
+      <tbody id="bizRows"><tr><td colspan="9" class="empty">Loading businesses…</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="hL">
+    <div class="panel-head"><h2 id="hL">Ledger</h2><span class="chip manual">Saved for you</span></div>
+    <p class="small muted">Log anything that isn't connected yet: eBay and Mercari sales, expenses, money owed, inventory value and visitor counts. Totals above update instantly.</p>
+    <form class="add" id="addForm">
+      <div class="field"><label for="fBiz">Business</label><select id="fBiz"></select></div>
+      <div class="field"><label for="fType">Type</label><select id="fType">
+        <option value="sale">Sale</option><option value="expense">Expense / cost</option>
+        <option value="owed_in">Money owed to me</option><option value="owed_out">Bill I owe</option>
+        <option value="inventory">Inventory value (latest)</option><option value="visitors">Visitors (30 days)</option></select></div>
+      <div class="field"><label for="fAmt">Amount</label><input id="fAmt" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="field"><label for="fDate">Date</label><input id="fDate" type="date"></div>
+      <div class="field"><label for="fNote">Note</label><input id="fNote" type="text" placeholder="e.g. Mercari order, shipping labels"></div>
+      <button class="btn" type="submit">Add entry</button>
+    </form>
+    <p class="small" id="ledgerMsg" hidden></p>
+    <div class="tablewrap" style="border:0"><table style="min-width:560px">
+      <thead><tr><th>Date</th><th>Business</th><th>Type</th><th>Note</th><th class="r">Amount</th><th></th></tr></thead>
+      <tbody id="ledgerRows"><tr><td colspan="6" class="empty">Loading ledger…</td></tr></tbody>
+    </table></div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const money = n => (n<0?"−$":"$") + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const TYPE_LABEL = {sale:"Sale",expense:"Expense",owed_in:"Owed to me",owed_out:"Bill I owe",inventory:"Inventory value",visitors:"Visitors"};
+const DAY = 864e5;
+
+/* Live numbers from connectors, keyed by business id ("timberfalls" is Shopify-backed). */
+const live = { shopify:{sales:null, orders:null, sessions:null, series:[], inv:null}, mail:{unread:null}, status:{} };
+let businesses = [], ledger = [], db = null;
+
+/* ---------- Connector sections ---------- */
+const FIX = {
+  needs_reauth: s=>`Reconnect ${s} in claude.ai Settings → Connectors.`,
+  server_not_connected: s=>`Add the ${s} connector in claude.ai Settings → Connectors.`,
+  selection_required: s=>`Choose which ${s} account this page should use.`,
+  not_in_manifest: s=>`${s} isn't allowed for this page. Turn it on from the page's Permissions menu.`,
+  approval_required: s=>`${s} needs your approval. Reload and choose Allow.`,
+  blocked_by_policy: s=>`Your organization blocks ${s} here.`,
+};
+function chip(el, kind, text){ el.className="chip "+kind; el.textContent=text; }
+function sectionError(server, err, chipEl, bodyEl){
+  const code = err && err.code;
+  const authz = ["needs_reauth","server_not_connected","selection_required","not_in_manifest","approval_required","blocked_by_policy"].includes(code);
+  chip(chipEl, authz?"bad":"warn", authz? "Not connected" : "Couldn't refresh");
+  const msg = FIX[code] ? FIX[code](server) : `${server} didn't answer. Showing the last numbers it sent.`;
+  if(bodyEl && authz) bodyEl.innerHTML = `<li class="empty">${esc(msg)}</li>`;
+  return authz;
+}
+function rowsOf(p){ return (p && Array.isArray(p.rows)) ? p.rows : []; }
+
+function watchShopify(mcp){
+  const opts = {refetchInterval: 15*60*1000};
+  mcp.watchTool("Shopify","run-analytics-query",{query:"FROM sales SHOW orders, net_sales SINCE -30d UNTIL today"}, ev=>{
+    if(ev.type==="error"){ if(sectionError("Shopify",ev.error,$("#tChip"))) {live.shopify.sales=null;} return render(); }
+    const r = rowsOf(ev.result.payload)[0]||[];
+    live.shopify.orders = +r[0]||0; live.shopify.sales = +r[1]||0;
+    stamp(ev.result); render();
+  }, opts);
+  mcp.watchTool("Shopify","run-analytics-query",{query:"FROM sessions SHOW sessions TIMESERIES day SINCE -30d UNTIL today"}, ev=>{
+    if(ev.type==="error"){ if(sectionError("Shopify",ev.error,$("#tChip"))) {live.shopify.sessions=null;live.shopify.series=[];} return render(); }
+    const rows = rowsOf(ev.result.payload);
+    live.shopify.series = rows.map(r=>+r[1]||0);
+    live.shopify.sessions = live.shopify.series.reduce((a,b)=>a+b,0);
+    chip($("#tChip"),"live","Live · Shopify"); stamp(ev.result); render();
+  }, opts);
+  mcp.watchTool("Shopify","run-analytics-query",{query:"FROM inventory SHOW ending_inventory_units GROUP BY product_title SINCE -1d UNTIL today"}, ev=>{
+    if(ev.type==="error"){ if(sectionError("Shopify",ev.error,$("#iChip"))) {live.shopify.inv=null; $("#invBody").textContent="Not connected.";} return; }
+    const rows = rowsOf(ev.result.payload).map(r=>({name:r[0], units:+r[1]||0}));
+    live.shopify.inv = rows; chip($("#iChip"),"live","Live · Shopify"); renderInventory();
+  }, {refetchInterval: 60*60*1000});
+}
+
+function watchGmail(mcp){
+  const opts = {refetchInterval: 5*60*1000};
+  mcp.watchTool("Gmail","search_threads",{query:"in:inbox is:unread category:primary -in:draft",pageSize:25,view:"THREAD_VIEW_MINIMAL"}, ev=>{
+    if(ev.type==="error"){ if(sectionError("Gmail",ev.error,$("#mChip"),$("#mList"))) live.mail.unread=null; return render(); }
+    const p = ev.result.payload||{}; const th = p.threads||[];
+    live.mail.unread = th.length >= 25 && p.resultCountEstimate ? +p.resultCountEstimate : th.length;
+    chip($("#mChip"),"live","Live · Gmail"); renderThreads($("#mList"), th, "Inbox zero in Primary.");
+    stamp(ev.result); render();
+  }, opts);
+  const q = "newer_than:30d -from:me -in:draft (to:help@timberfallsclothing.com OR ((from:ebay.com OR from:mercari.com OR from:mercari.jp) (subject:question OR subject:message OR subject:offer)))";
+  mcp.watchTool("Gmail","search_threads",{query:q,pageSize:20,view:"THREAD_VIEW_MINIMAL"}, ev=>{
+    if(ev.type==="error"){ sectionError("Gmail",ev.error,$("#qChip"),$("#qList")); return; }
+    const th = (ev.result.payload||{}).threads||[];
+    chip($("#qChip"),"live","Live · Gmail"); renderThreads($("#qList"), th, "No customer questions in the last 30 days.");
+  }, opts);
+}
+
+function renderThreads(el, threads, emptyText){
+  if(!threads.length){ el.innerHTML = `<li class="empty">${esc(emptyText)}</li>`; return; }
+  el.innerHTML = threads.slice(0,12).map(t=>{
+    const m = (t.messages||[])[0]||{};
+    const d = m.date ? new Date(m.date) : null;
+    const when = d ? d.toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
+    return `<li><div><div class="subj">${t.viewUrl?`<a href="${esc(t.viewUrl)}" target="_blank" rel="noopener">${esc(m.subject||"(no subject)")}</a>`:esc(m.subject||"(no subject)")}</div>
+      <div class="from">${esc(m.sender||"")}${m.snippet?" · "+esc(m.snippet):""}</div></div><span class="small muted num">${esc(when)}</span></li>`;
+  }).join("");
+}
+
+function renderInventory(){
+  const inv = live.shopify.inv; if(!inv) return;
+  const inStock = inv.filter(r=>r.units>0), out = inv.filter(r=>r.units<=0);
+  const pod = inStock.length && inStock.every(r=>r.units>=9999);
+  $("#invBody").innerHTML = `
+    <div class="panel-head"><span><span class="num" style="font-size:1.3rem;color:var(--fg)">${inStock.length}</span> products available</span><span><span class="num" style="color:var(--bad)">${out.length}</span> unavailable</span></div>
+    ${pod?`<p class="note">These products show stock of 9,999+ per variant, which is how print-on-demand apps list items. Unit counts aren't real stock, so the dashboard counts products instead.</p>`:""}
+    ${out.length?`<details><summary>Unavailable products (${out.length})</summary><ul class="list">${out.map(r=>`<li><div class="subj">${esc(r.name)}</div><span class="chip bad">0</span></li>`).join("")}</ul></details>`:""}`;
+}
+
+function spark(series){
+  const svg=$("#tSpark"); if(!series.length){svg.innerHTML="";return;}
+  const W=300,H=56,max=Math.max(1,...series),n=series.length;
+  const pts=series.map((v,i)=>[n===1?W:i*(W/(n-1)), H-4-(v/max)*(H-10)]);
+  const line="M"+pts.map(p=>p.map(x=>x.toFixed(1)).join(",")).join(" L");
+  svg.innerHTML=`<path class="area" d="${line} L${W},${H} L0,${H} Z"></path><path class="line" d="${line}"></path><circle cx="${pts[n-1][0]}" cy="${pts[n-1][1]}" r="3"></circle>`;
+}
+
+let lastStamp = null;
+function stamp(result){
+  const t = result && result.cache ? result.cache.storedAt : Date.now();
+  if(!lastStamp || t>lastStamp) lastStamp=t;
+  $("#updated").textContent = "Updated " + new Date(lastStamp).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+}
+
+/* ---------- Totals ---------- */
+function within30(e){ return e.type==="owed_in"||e.type==="owed_out"||e.type==="inventory"||e.type==="visitors" || (Date.now()-new Date(e.date).getTime()) <= 30*DAY; }
+function totalsFor(bizId){
+  const rows = ledger.filter(e=>e.biz===bizId && within30(e) && !e.paid);
+  const sum = t => rows.filter(e=>e.type===t).reduce((a,e)=>a+(+e.amount||0),0);
+  const latest = t => { const r=ledger.filter(e=>e.biz===bizId && e.type===t).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0]; return r? +r.amount : null; };
+  const b = businesses.find(x=>x.id===bizId)||{};
+  let sales = sum("sale"), visitors = latest("visitors");
+  if(b.source==="shopify"){ if(live.shopify.sales!=null) sales += live.shopify.sales; if(live.shopify.sessions!=null) visitors = live.shopify.sessions; }
+  const costs = sum("expense");
+  return {sales, costs, pl: sales-costs, owedIn: sum("owed_in"), owedOut: sum("owed_out"), inventory: latest("inventory"), visitors};
+}
+function srcLabel(b){
+  if(b.source==="shopify") return live.shopify.sales!=null?`<span class="chip live">Live · Shopify</span>`:`<span class="chip warn">Shopify · waiting</span>`;
+  if(b.source==="prototype") return `<span class="chip">Not launched</span>`;
+  return `<span class="chip manual">Ledger</span>${b.platform?` <span class="small muted">${esc(b.platform)}</span>`:""}`;
+}
+
+function render(){
+  let T={sales:0,costs:0,pl:0,owedIn:0,owedOut:0,visitors:0};
+  $("#bizRows").innerHTML = businesses.length ? businesses.map(b=>{
+    const t=totalsFor(b.id);
+    T.sales+=t.sales; T.costs+=t.costs; T.pl+=t.pl; T.owedIn+=t.owedIn; T.owedOut+=t.owedOut; T.visitors+=t.visitors||0;
+    const cell=v=>`<td class="r num">${v==null?'<span class="muted">—</span>':money(v)}</td>`;
+    return `<tr><td><strong>${esc(b.name)}</strong>${b.site?`<br><span class="small muted">${esc(b.site)}</span>`:""}</td><td>${srcLabel(b)}</td>
+      ${cell(t.sales)}${cell(t.costs)}<td class="r num" style="color:${t.pl<0?"var(--bad)":t.pl>0?"var(--good)":"inherit"}">${money(t.pl)}</td>
+      ${cell(t.owedIn)}${cell(t.owedOut)}${cell(t.inventory)}<td class="r num">${t.visitors==null?'<span class="muted">—</span>':t.visitors.toLocaleString()}</td></tr>`;
+  }).join("") : `<tr><td colspan="9" class="empty">No businesses yet. Ask Claude to add one, and it shows up here.</td></tr>`;
+
+  $("#kSales").textContent=money(T.sales);
+  $("#kSalesS").textContent = live.shopify.orders!=null ? `${live.shopify.orders} Shopify orders + ledger` : "From the ledger";
+  const pl=$("#kPL"); pl.textContent=money(T.pl); pl.className="v "+(T.pl<0?"neg":T.pl>0?"pos":"");
+  $("#kOwedIn").textContent=money(T.owedIn);
+  $("#kOwedOut").textContent=money(T.owedOut);
+  $("#kMail").textContent = live.mail.unread==null ? "—" : live.mail.unread.toLocaleString();
+  $("#kVisits").textContent = T.visitors.toLocaleString();
+  $("#tVisits").textContent = live.shopify.sessions==null ? "—" : live.shopify.sessions.toLocaleString();
+  spark(live.shopify.series);
+  $("#fBiz").innerHTML = businesses.map(b=>`<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
+  renderLedger();
+}
+
+function renderLedger(){
+  const rows=[...ledger].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,50);
+  const nameOf=id=>(businesses.find(b=>b.id===id)||{}).name||id;
+  $("#ledgerRows").innerHTML = rows.length ? rows.map(e=>`<tr><td class="num">${esc(e.date)}</td><td>${esc(nameOf(e.biz))}</td><td>${esc(TYPE_LABEL[e.type]||e.type)}</td><td>${esc(e.note)}</td>
+    <td class="r num">${e.type==="visitors"?(+e.amount).toLocaleString():money(+e.amount||0)}</td>
+    <td class="r">${(e.type==="owed_in"||e.type==="owed_out")&&!e.paid?`<button class="del" data-paid="${esc(e._id)}">Mark paid</button> `:""}${e.paid?'<span class="chip live">Paid</span> ':""}<button class="del" data-del="${esc(e._id)}">Delete</button></td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">Nothing logged yet. Add your first eBay or Mercari sale above.</td></tr>`;
+}
+
+/* ---------- Boot ---------- */
+$("#fDate").value = new Date().toISOString().slice(0,10);
+render();
+
+(async()=>{
+  const mcp = await claude.use("mcp");
+  if(!mcp){
+    ["#tChip","#iChip","#mChip","#qChip"].forEach(s=>chip($(s),"bad","Not available here"));
+    $("#mList").innerHTML=$("#qList").innerHTML=`<li class="empty">Open this page in claude.ai to load your accounts.</li>`;
+    $("#updated").textContent="Live accounts unavailable in this view";
+  } else {
+    watchShopify(mcp); watchGmail(mcp);
+    $("#refresh").addEventListener("click", async()=>{ $("#updated").textContent="Refreshing…"; try{ await mcp.invalidate(); }catch(e){} });
+  }
+})();
+
+(async()=>{
+  db = await claude.use("db");
+  if(!db){
+    $("#bizRows").innerHTML=`<tr><td colspan="9" class="empty">Sign in to claude.ai to load your businesses and ledger.</td></tr>`;
+    $("#ledgerRows").innerHTML=`<tr><td colspan="6" class="empty">Sign in to claude.ai to see the ledger.</td></tr>`;
+    $("#addForm").querySelector("button").disabled=true; return;
+  }
+  db.collection("businesses").orderBy("order").onSnapshot(s=>{ businesses=s.docs.map(d=>({id:d.id,...d.data()})); render(); },
+    e=>{ $("#bizRows").innerHTML=`<tr><td colspan="9" class="empty">Couldn't load businesses (${esc(e.code)}).</td></tr>`; });
+  db.collection("ledger").orderBy("date","desc").limit(1000).onSnapshot(s=>{ ledger=s.docs.map(d=>({_id:d.id,...d.data()})); render(); },
+    e=>{ $("#ledgerRows").innerHTML=`<tr><td colspan="6" class="empty">Couldn't load the ledger (${esc(e.code)}).</td></tr>`; });
+})();
+
+function ledgerMsg(t,bad){ const m=$("#ledgerMsg"); m.hidden=false; m.textContent=t; m.style.color=bad?"var(--bad)":"var(--good)"; }
+$("#addForm").addEventListener("submit", async e=>{
+  e.preventDefault(); if(!db) return;
+  const amount=+$("#fAmt").value;
+  if(!(amount>0)){ ledgerMsg("Enter an amount above zero.",true); return; }
+  if(!$("#fBiz").value){ ledgerMsg("Pick a business first.",true); return; }
+  try{
+    await db.collection("ledger").add({biz:$("#fBiz").value,type:$("#fType").value,amount:Math.round(amount*100)/100,date:$("#fDate").value||new Date().toISOString().slice(0,10),note:$("#fNote").value.trim().slice(0,200),paid:false});
+    $("#fAmt").value=""; $("#fNote").value=""; ledgerMsg("Saved.");
+  }catch(err){ ledgerMsg(err.code==="permission_denied"?"Only you can add entries to this ledger.":"Couldn't save. Try again.",true); }
+});
+document.addEventListener("click", async e=>{
+  const b=e.target.closest("button"); if(!b||!db) return;
+  try{
+    if(b.dataset.del){ await db.collection("ledger").doc(b.dataset.del).delete(); ledgerMsg("Deleted."); }
+    if(b.dataset.paid){ await db.collection("ledger").doc(b.dataset.paid).update({paid:true}); ledgerMsg("Marked paid."); }
+  }catch(err){ ledgerMsg("Couldn't update that entry.",true); }
+});
+</script>
