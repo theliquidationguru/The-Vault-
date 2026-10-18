@@ -177,14 +177,14 @@ const PRICING = {
   driverMileShare: 1,         // drivers keep 100% of the mileage charge
   negotiatedFeeShare: .5,     // on a negotiated job, Rebu keeps 50% of the agreed price; driver gets the rest
    // paid members pay half mileage 6am–midnight; full rate midnight–6am
-  licensedFeeDay: 10,        // alcohol/tobacco/cannabis: no markup, flat fee 6am–midnight
+  licensedFeeDay: 10,        // tobacco & vape (licensed): no markup, flat fee 6am–midnight
   licensedFeeNight: 25,      // same, midnight–6am
   licensedAdminFee: 5,       // per order containing any licensed item; 100% Rebu, never discounted, applies to negotiated orders too
 };
 /* Membership tiers. level gates categories; discount applies to `discountOn`. */
 const TIERS = [
   {id:"none",     name:"No plan",  price:0,     level:0, discount:0,   discountOn:"none",  perks:"Everyday items only"},
-  {id:"basic",    name:"Basic",    price:9.99,  level:1, discount:.05, discountOn:"service", perks:"Alcohol, tobacco & cannabis · 5% off delivery charges"},
+  {id:"basic",    name:"Basic",    price:9.99,  level:1, discount:.05, discountOn:"service", perks:"Tobacco & vape · 5% off delivery charges"},
   {id:"gold",     name:"Gold",     price:19.99, level:2, discount:.15, discountOn:"service", perks:"Basic + adult products · 15% off delivery charges"},
   {id:"platinum", name:"Platinum", price:39.99, level:3, discount:.20, discountOn:"order",   perks:"Gold + 20% off every order · pickup from any address"},
 ];
@@ -192,9 +192,7 @@ const TIERS = [
 /* Category rules. Hours are [open, close) in 24h; close past midnight wraps. Legal notes are a read of CA rules, to be confirmed by counsel. */
 const CATS = {
   everyday: {name:"Everyday",       age:0,  level:0, licensed:false, hours:null,   rule:"Snacks, OTC meds, chargers, auto parts. Open 24/7."},
-  alcohol:  {name:"Alcohol",        age:21, level:1, licensed:true,  hours:[6,2],  rule:"CA bans alcohol sales 2am–6am. Store is the seller of record; no markup. Driver checks ID."},
   tobacco:  {name:"Tobacco & vape", age:21, level:1, licensed:true,  hours:null,   rule:"Unflavored only (CA flavor ban). PACT Act applies to delivery sales. Store is seller of record; no markup."},
-  cannabis: {name:"Cannabis",       age:21, level:1, licensed:true,  hours:[6,22], rule:"Licensed-retailer delivery only, 6am–10pm (DCC). No markup. Hemp THC being phased out in CA."},
   adult:    {name:"Adult & novelty",age:18, level:2, licensed:false, hours:null,   rule:"Products only. 18+ gate, discreet bag."},
 };
 const TOWNS = [["Yreka",0],["Montague",6],["Grenada",11],["Weed",28],["Mount Shasta",36],["McCloud",46],["Dunsmuir",43],["Fort Jones",17],["Etna",29],["Happy Camp",72],["Dorris",50],["Tulelake",88]];
@@ -202,12 +200,10 @@ const TOWNS = [["Yreka",0],["Montague",6],["Grenada",11],["Weed",28],["Mount Sha
 const STORES = [
   {id:"s5",name:"Rebu Stock Room",town:"Yreka",supply:"own",cats:["everyday"],items:[
     ["Phone charger USB-C","everyday",9.00],["Pain reliever 50ct","everyday",7.50],["Energy drink 4pk","everyday",8.00],["Liquidation mystery box","everyday",25.00]]},
-  {id:"s1",name:"North Valley Liquor & Mart",town:"Yreka",supply:"partner",cats:["alcohol","everyday"],items:[
-    ["Local IPA 6-pack","alcohol",13.99],["Cabernet 750ml","alcohol",16.49],["Ice 10lb","everyday",4.29],["Tortilla chips","everyday",4.99]]},
+  {id:"s1",name:"North Valley Mart",town:"Yreka",supply:"partner",cats:["everyday"],items:[
+    ["Ice 10lb","everyday",4.29],["Tortilla chips","everyday",4.99],["Motor oil 5qt","everyday",27.99],["Firewood bundle","everyday",8.99]]},
   {id:"s2",name:"Ridge Smoke & Vape",town:"Weed",supply:"partner",cats:["tobacco"],items:[
     ["Tobacco-flavor vape pod 2pk","tobacco",19.99],["Rolling papers","tobacco",2.99]]},
-  {id:"s3",name:"Cascade Green (licensed)",town:"Mount Shasta",supply:"partner",cats:["cannabis"],items:[
-    ["Pre-roll 1g","cannabis",12.00],["Gummies 100mg","cannabis",22.00],["CBD tincture (0 THC)","cannabis",34.00]]},
   {id:"s4",name:"After Dark Boutique",town:"Yreka",supply:"partner",cats:["adult"],items:[
     ["Massage oil","adult",18.00],["Novelty gift box","adult",29.00],["Glass pipe","adult",24.00]]},
 ];
@@ -298,7 +294,7 @@ function renderShop(){
 }
 
 function renderAnything(){
-  const e=state.errand||{store:"North Valley Liquor & Mart",storeTown:"Yreka",list:"2x car jumper cables\nPhone charger (Lightning)\nBag of ice",est:45};
+  const e=state.errand||{store:"North Valley Mart",storeTown:"Yreka",list:"2x car jumper cables\nPhone charger (Lightning)\nBag of ice",est:45};
   const eLegs=[{label:`${e.storeTown} → ${state.town}`,miles:billMiles(e.storeTown,state.town)}];
   const eq=quote([{label:"Receipt × 2",amount:r2(+e.est*PRICING.markup),markup:true}],eLegs,state.hour);
   const c=state.courier||{from:"Yreka",to:state.town,what:"Spare house key from a friend's place"};
@@ -315,7 +311,7 @@ function renderAnything(){
       ${negPicker("e",eq.mileage+eq.special)}
       ${state.negMode.e?negRows(+e.est*PRICING.markup,state.negOffer.e):quoteRows(eq,eLegs)}
       <div class="notice"><b>How payment works:</b> we hold this estimate on your card. The runner pays at the store, and you're charged the real receipt × 2 plus mileage.</div>
-      <div class="notice"><b>Not allowed:</b> anything illegal, prescription drugs, firearms or ammo. Alcohol, tobacco and cannabis must be ordered from a licensed store in Shop, not by errand.</div>
+      <div class="notice"><b>Not allowed:</b> anything illegal, prescription drugs, firearms or ammo. No alcohol or cannabis. Tobacco and vape must be ordered from a licensed store in Shop, not by errand.</div>
       <button class="btn" id="sendErrand">${state.negMode.e?"Send offer to drivers":"Send errand request"}</button>
     </div>
     <div><p class="eyebrow">Platinum only</p><h2>Pick up from any address</h2></div>
@@ -429,7 +425,7 @@ function renderAdmin(){
   return `<section class="screen"><p class="eyebrow">Operations</p><h1>Pricing & rules</h1>
     <div class="panel"><h3>Per-order pricing</h3>
       <div class="row"><span>Everyday, adult, errands</span><span>Shelf price × 2</span></div>
-      <div class="row"><span>Alcohol, tobacco, cannabis</span><span>Store price, no markup</span></div>
+      <div class="row"><span>Tobacco & vape (licensed)</span><span>Store price, no markup</span></div>
       <div class="row"><span>Licensed delivery fee</span><span class="num">$10 day · $25 midnight–6am</span></div>
       <div class="row"><span>Licensed-item admin fee (Rebu)</span><span class="num">$5 per order, incl. negotiated</span></div>
       <div class="row"><span>Mileage, store → customer</span><span class="num">$2.00/mi, 3 mi minimum</span></div>
@@ -441,7 +437,7 @@ function renderAdmin(){
     <p class="muted small">At ${fmtHour(state.hour)}, these are the rules the app enforces. Move the demo time slider to watch categories open and close.</p>
     <div class="tablewrap"><table style="min-width:720px"><thead><tr><th>Category</th><th>Plan</th><th>Age</th><th>Hours</th><th>Price</th><th>Now</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="panel"><h3>Orders today</h3>${state.orders.length?state.orders.map(o=>`<div class="row"><span>#${o.id} · ${o.kind} · ${o.town} <span class="num">${money(o.total)}</span></span><span class="tag ${o.refused?"closed":o.step>=4?"open":""}">${o.refused?"Refused":o.step>=4?"Delivered":"Active"}</span></div>`).join("")+`<div class="row"><span>Paid to drivers</span><span class="num">${money(state.orders.reduce((a,o)=>a+o.driverPay,0))}</span></div><div class="row"><strong>Our take after driver pay</strong><strong class="num">${money(rev)}</strong></div>`:`<p class="muted small">No orders yet.</p>`}</div>
-    <p class="small muted">Legal notes are a working read of California rules, not legal advice. Confirm with a CA alcohol and cannabis attorney before launch.</p></section>`;
+    <p class="small muted">Legal notes are a working read of California rules, not legal advice. Alcohol and cannabis are off the platform for now. Confirm tobacco delivery rules with a CA attorney before launch.</p></section>`;
 }
 
 /* ---------- Render + events ---------- */
